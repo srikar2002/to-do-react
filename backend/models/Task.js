@@ -27,6 +27,10 @@ const taskSchema = new mongoose.Schema({
     enum: ['Pending', 'Completed'],
     default: 'Pending'
   },
+  rollover: {
+    type: Boolean,
+    default: false
+  },
   createdAt: {
     type: Date,
     default: Date.now

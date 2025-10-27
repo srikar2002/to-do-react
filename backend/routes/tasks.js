@@ -128,4 +128,45 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
+
+// Rollover all users' tasks (for scheduled job)
+router.post('/rollover-all', async (req, res) => {
+  try {
+    const today = dayjs().format('YYYY-MM-DD');
+    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+    
+    // Find all pending tasks from today for all users
+    const tasksToRollover = await Task.find({
+      date: today,
+      status: 'Pending'
+    });
+    
+    if (tasksToRollover.length === 0) {
+      return res.json({ 
+        message: 'No tasks to rollover for any user', 
+        rolledOverCount: 0 
+      });
+    }
+    
+    // Update all pending tasks to tomorrow's date
+    const updateResult = await Task.updateMany(
+      {
+        date: today,
+        status: 'Pending'
+      },
+      {
+        $set: { date: tomorrow }
+      }
+    );
+    
+    res.json({
+      message: `Successfully rolled over ${updateResult.modifiedCount} tasks to tomorrow for all users`,
+      rolledOverCount: updateResult.modifiedCount
+    });
+  } catch (error) {
+    console.error('Rollover all tasks error:', error);
+    res.status(500).json({ message: 'Server error while rolling over all tasks' });
+  }
+});
+
 module.exports = router;
