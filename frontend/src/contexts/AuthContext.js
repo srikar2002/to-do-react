@@ -17,10 +17,19 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // You could verify the token here by making an API call
-      setUser({ token });
+    const userData = localStorage.getItem('user');
+    
+    if (token && userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+        setUser({ ...parsedUser, token });
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+        // Clear invalid data
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
     }
     setLoading(false);
   }, []);
@@ -31,6 +40,7 @@ export const AuthProvider = ({ children }) => {
       const { token, user: userData } = response.data;
       
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser({ ...userData, token });
       
@@ -49,6 +59,7 @@ export const AuthProvider = ({ children }) => {
       const { token, user: userData } = response.data;
       
       localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser({ ...userData, token });
       
@@ -63,6 +74,7 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('user');
     delete axios.defaults.headers.common['Authorization'];
     setUser(null);
   };

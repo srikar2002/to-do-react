@@ -50,13 +50,21 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleStatus }) => {
                 {task.description}
               </Typography>
             )}
-            <Box mt={1}>
+            <Box mt={1} display="flex" gap={1} flexWrap="wrap">
               <Chip 
                 label={task.status} 
                 size="small" 
                 color={isCompleted ? 'success' : 'default'}
                 variant={isCompleted ? 'filled' : 'outlined'}
               />
+              {task.rollover && (
+                <Chip 
+                  label="Auto-rollover" 
+                  size="small" 
+                  color="info"
+                  variant="outlined"
+                />
+              )}
             </Box>
           </Box>
           <Box display="flex" flexDirection="column" gap={0.5}>

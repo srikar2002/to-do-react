@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
+import { useAuth } from './AuthContext';
 
 const TaskContext = createContext();
 
@@ -13,6 +14,7 @@ export const useTasks = () => {
 };
 
 export const TaskProvider = ({ children }) => {
+  const { user } = useAuth();
   const [tasks, setTasks] = useState({
     today: [],
     tomorrow: [],
@@ -26,6 +28,10 @@ export const TaskProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   const fetchTasks = async () => {
+    if (!user) {
+      return;
+    }
+    
     setLoading(true);
     try {
       const response = await axios.get('/api/tasks');
@@ -45,6 +51,10 @@ export const TaskProvider = ({ children }) => {
   };
 
   const createTask = async (taskData) => {
+    if (!user) {
+      return { success: false, message: 'User not authenticated' };
+    }
+    
     try {
       const response = await axios.post('/api/tasks', taskData);
       await fetchTasks(); // Refresh tasks
@@ -57,7 +67,12 @@ export const TaskProvider = ({ children }) => {
     }
   };
 
+
   const updateTask = async (taskId, taskData) => {
+    if (!user) {
+      return { success: false, message: 'User not authenticated' };
+    }
+    
     try {
       const response = await axios.put(`/api/tasks/${taskId}`, taskData);
       await fetchTasks(); // Refresh tasks
@@ -71,6 +86,10 @@ export const TaskProvider = ({ children }) => {
   };
 
   const deleteTask = async (taskId) => {
+    if (!user) {
+      return { success: false, message: 'User not authenticated' };
+    }
+    
     try {
       await axios.delete(`/api/tasks/${taskId}`);
       await fetchTasks(); // Refresh tasks
@@ -89,8 +108,10 @@ export const TaskProvider = ({ children }) => {
   };
 
   useEffect(() => {
-    fetchTasks();
-  }, []);
+    if (user) {
+      fetchTasks();
+    }
+  }, [user]);
 
   const value = {
     tasks,

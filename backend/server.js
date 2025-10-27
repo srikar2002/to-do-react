@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const { startRolloverScheduler } = require('./scheduler/rolloverScheduler');
 
 // Load environment variables
 dotenv.config();
@@ -33,4 +34,7 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  
+  // Start the rollover scheduler
+  startRolloverScheduler();
 });

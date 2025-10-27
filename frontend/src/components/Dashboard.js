@@ -18,7 +18,15 @@ import {
   TextField,
   IconButton,
   Chip,
-  CircularProgress
+  CircularProgress,
+  FormControlLabel,
+  Switch,
+  Snackbar,
+  Alert,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -28,9 +36,6 @@ import {
   CheckCircle as CheckCircleIcon,
   RadioButtonUnchecked as RadioButtonUncheckedIcon
 } from '@mui/icons-material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import dayjs from 'dayjs';
 import { useAuth } from '../contexts/AuthContext';
 import { useTasks } from '../contexts/TaskContext';
@@ -45,17 +50,35 @@ const Dashboard = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    date: dayjs(),
+    date: 'today',
     status: 'Pending'
+  });
+  const [snackbar, setSnackbar] = useState({
+    open: false,
+    message: '',
+    severity: 'success'
   });
 
   const handleOpenDialog = (task = null) => {
     if (task) {
       setEditingTask(task);
+      // Convert task date to our dropdown format
+      const taskDate = dayjs(task.date);
+      const today = dayjs();
+      const tomorrow = dayjs().add(1, 'day');
+      const dayAfterTomorrow = dayjs().add(2, 'day');
+      
+      let dateOption = 'today';
+      if (taskDate.isSame(tomorrow, 'day')) {
+        dateOption = 'tomorrow';
+      } else if (taskDate.isSame(dayAfterTomorrow, 'day')) {
+        dateOption = 'dayAfterTomorrow';
+      }
+      
       setFormData({
         title: task.title,
         description: task.description,
-        date: dayjs(task.date),
+        date: dateOption,
         status: task.status
       });
     } else {
@@ -63,7 +86,7 @@ const Dashboard = () => {
       setFormData({
         title: '',
         description: '',
-        date: dayjs(),
+        date: 'today',
         status: 'Pending'
       });
     }
@@ -76,7 +99,7 @@ const Dashboard = () => {
     setFormData({
       title: '',
       description: '',
-      date: dayjs(),
+      date: 'today',
       status: 'Pending'
     });
   };
@@ -84,10 +107,26 @@ const Dashboard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Convert dropdown selection to actual date
+    let actualDate;
+    switch (formData.date) {
+      case 'today':
+        actualDate = dayjs().format('YYYY-MM-DD');
+        break;
+      case 'tomorrow':
+        actualDate = dayjs().add(1, 'day').format('YYYY-MM-DD');
+        break;
+      case 'dayAfterTomorrow':
+        actualDate = dayjs().add(2, 'day').format('YYYY-MM-DD');
+        break;
+      default:
+        actualDate = dayjs().format('YYYY-MM-DD');
+    }
+    
     const taskData = {
       title: formData.title,
       description: formData.description,
-      date: formData.date.format('YYYY-MM-DD'),
+      date: actualDate,
       status: formData.status
     };
 
@@ -96,12 +135,18 @@ const Dashboard = () => {
       const result = await updateTask(editingTask._id, taskData);
       if (result.success) {
         handleCloseDialog();
+        showSnackbar('Task updated successfully', 'success');
+      } else {
+        showSnackbar(result.message || 'Failed to update task', 'error');
       }
     } else {
       // Create new task
       const result = await createTask(taskData);
       if (result.success) {
         handleCloseDialog();
+        showSnackbar('Task created successfully', 'success');
+      } else {
+        showSnackbar(result.message || 'Failed to create task', 'error');
       }
     }
   };
@@ -114,6 +159,15 @@ const Dashboard = () => {
 
   const handleToggleStatus = async (taskId, currentStatus) => {
     await toggleTaskStatus(taskId, currentStatus);
+  };
+
+
+  const showSnackbar = (message, severity) => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const handleCloseSnackbar = () => {
+    setSnackbar({ ...snackbar, open: false });
   };
 
   const formatDate = (dateString) => {
@@ -138,12 +192,11 @@ const Dashboard = () => {
   }
 
   return (
-    <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <Box sx={{ flexGrow: 1 }}>
+    <Box sx={{ flexGrow: 1 }}>
         <AppBar position="static">
           <Toolbar>
             <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
-              To-Do App
+              Taskly
             </Typography>
             <Typography variant="body1" sx={{ mr: 2 }}>
               Welcome, {user?.name}!
@@ -278,12 +331,19 @@ const Dashboard = () => {
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 sx={{ mb: 2 }}
               />
-              <DatePicker
-                label="Date"
-                value={formData.date}
-                onChange={(newValue) => setFormData({ ...formData, date: newValue })}
-                sx={{ width: '100%', mb: 2 }}
-              />
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel id="date-select-label">Date</InputLabel>
+                <Select
+                  labelId="date-select-label"
+                  value={formData.date}
+                  label="Date"
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                >
+                  <MenuItem value="today">Today</MenuItem>
+                  <MenuItem value="tomorrow">Tomorrow</MenuItem>
+                  <MenuItem value="dayAfterTomorrow">Day After Tomorrow</MenuItem>
+                </Select>
+              </FormControl>
             </DialogContent>
             <DialogActions>
               <Button onClick={handleCloseDialog}>Cancel</Button>
@@ -293,8 +353,19 @@ const Dashboard = () => {
             </DialogActions>
           </form>
         </Dialog>
+
+        {/* Snackbar for notifications */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={handleCloseSnackbar}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        >
+          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
       </Box>
-    </LocalizationProvider>
   );
 };
 
