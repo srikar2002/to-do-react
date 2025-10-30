@@ -5,7 +5,8 @@ import {
   Typography,
   IconButton,
   Box,
-  Chip
+  Chip,
+  Tooltip
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -27,28 +28,40 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleStatus }) => {
     >
       <CardContent sx={{ pb: 1 }}>
         <Box display="flex" alignItems="flex-start" justifyContent="space-between">
-          <Box flexGrow={1} mr={1}>
-            <Typography 
-              variant="h6" 
-              component="h3" 
-              sx={{ 
-                textDecoration: isCompleted ? 'line-through' : 'none',
-                color: isCompleted ? 'text.secondary' : 'text.primary'
-              }}
-            >
-              {task.title}
-            </Typography>
-            {task.description && (
+          <Box flexGrow={1} mr={1} sx={{ minWidth: 0 }}>
+            <Tooltip title={task.title} placement="top-start">
               <Typography 
-                variant="body2" 
-                color="text.secondary" 
+                variant="h6" 
+                component="h3" 
                 sx={{ 
-                  mt: 1,
-                  textDecoration: isCompleted ? 'line-through' : 'none'
+                  textDecoration: isCompleted ? 'line-through' : 'none',
+                  color: isCompleted ? 'text.secondary' : 'text.primary',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
                 }}
               >
-                {task.description}
+                {task.title}
               </Typography>
+            </Tooltip>
+            {task.description && (
+              <Tooltip title={task.description} placement="top-start">
+                <Typography 
+                  variant="body2" 
+                  color="text.secondary" 
+                  sx={{ 
+                    mt: 1,
+                    textDecoration: isCompleted ? 'line-through' : 'none',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 3,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                    wordBreak: 'break-word'
+                  }}
+                >
+                  {task.description}
+                </Typography>
+              </Tooltip>
             )}
             <Box mt={1} display="flex" gap={1} flexWrap="wrap">
               <Chip 

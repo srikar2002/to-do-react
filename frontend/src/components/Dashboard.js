@@ -53,11 +53,16 @@ const Dashboard = () => {
     date: 'today',
     status: 'Pending'
   });
+  const [errors, setErrors] = useState({
+    title: ''
+  });
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
     severity: 'success'
   });
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [taskToDelete, setTaskToDelete] = useState(null);
 
   const handleOpenDialog = (task = null) => {
     if (task) {
@@ -102,10 +107,29 @@ const Dashboard = () => {
       date: 'today',
       status: 'Pending'
     });
+    setErrors({ title: '' });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Custom validations
+    const nextErrors = { title: '' };
+    const isTitleEmpty = formData.title.trim().length === 0;
+    const titleTooLong = formData.title.trim().length > 50;
+    const descriptionTooLong = formData.description.trim().length > 200;
+
+    if (isTitleEmpty) {
+      nextErrors.title = 'Title is required';
+    } else if (titleTooLong) {
+      nextErrors.title = 'Max 50 characters';
+    }
+
+    setErrors(nextErrors);
+    if (nextErrors.title || descriptionTooLong) {
+      showSnackbar('Please fix validation errors before submitting', 'error');
+      return;
+    }
     
     // Convert dropdown selection to actual date
     let actualDate;
@@ -151,10 +175,25 @@ const Dashboard = () => {
     }
   };
 
-  const handleDeleteTask = async (taskId) => {
-    if (window.confirm('Are you sure you want to delete this task?')) {
-      await deleteTask(taskId);
+  const handleRequestDelete = (task) => {
+    setTaskToDelete(task);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleCloseDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+    setTaskToDelete(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!taskToDelete) return;
+    const result = await deleteTask(taskToDelete._id);
+    if (result?.success) {
+      showSnackbar('Task deleted successfully', 'success');
+    } else {
+      showSnackbar(result?.message || 'Failed to delete task', 'error');
     }
+    handleCloseDeleteDialog();
   };
 
   const handleToggleStatus = async (taskId, currentStatus) => {
@@ -223,7 +262,7 @@ const Dashboard = () => {
                       key={task._id}
                       task={task}
                       onEdit={() => handleOpenDialog(task)}
-                      onDelete={() => handleDeleteTask(task._id)}
+                      onDelete={() => handleRequestDelete(task)}
                       onToggleStatus={() => handleToggleStatus(task._id, task.status)}
                     />
                   ))}
@@ -250,7 +289,7 @@ const Dashboard = () => {
                       key={task._id}
                       task={task}
                       onEdit={() => handleOpenDialog(task)}
-                      onDelete={() => handleDeleteTask(task._id)}
+                      onDelete={() => handleRequestDelete(task)}
                       onToggleStatus={() => handleToggleStatus(task._id, task.status)}
                     />
                   ))}
@@ -277,7 +316,7 @@ const Dashboard = () => {
                       key={task._id}
                       task={task}
                       onEdit={() => handleOpenDialog(task)}
-                      onDelete={() => handleDeleteTask(task._id)}
+                      onDelete={() => handleRequestDelete(task)}
                       onToggleStatus={() => handleToggleStatus(task._id, task.status)}
                     />
                   ))}
@@ -307,7 +346,7 @@ const Dashboard = () => {
           <DialogTitle>
             {editingTask ? 'Edit Task' : 'Add New Task'}
           </DialogTitle>
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} noValidate>
             <DialogContent>
               <TextField
                 autoFocus
@@ -316,8 +355,16 @@ const Dashboard = () => {
                 fullWidth
                 variant="outlined"
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                required
+                onChange={(e) => {
+                  const next = e.target.value || '';
+                  const capped = next.length > 50 ? next.slice(0, 50) : next;
+                  setFormData({ ...formData, title: capped });
+                  if (errors.title && capped.trim().length > 0 && capped.trim().length <= 50) {
+                    setErrors({ ...errors, title: '' });
+                  }
+                }}
+                error={Boolean(errors.title) || (formData.title.length >= 50 && formData.title.length > 0)}
+                helperText={errors.title || (formData.title.length >= 50 && formData.title.length > 0 ? "Max 50 characters reached" : '')}
                 sx={{ mb: 2 }}
               />
               <TextField
@@ -328,7 +375,13 @@ const Dashboard = () => {
                 rows={3}
                 variant="outlined"
                 value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                onChange={(e) => {
+                  const next = e.target.value || '';
+                  const capped = next.length > 200 ? next.slice(0, 200) : next;
+                  setFormData({ ...formData, description: capped });
+                }}
+                error={formData.description.length >= 200 && formData.description.length > 0}
+                helperText={formData.description.length >= 200 && formData.description.length > 0 ? "Max 200 characters reached" : ''}
                 sx={{ mb: 2 }}
               />
               <FormControl fullWidth sx={{ mb: 2 }}>
@@ -347,7 +400,15 @@ const Dashboard = () => {
             </DialogContent>
             <DialogActions>
               <Button onClick={handleCloseDialog}>Cancel</Button>
-              <Button type="submit" variant="contained">
+              <Button
+                type="submit"
+                variant="contained"
+                disabled={
+                  formData.title.trim().length === 0 ||
+                  formData.title.length >= 50 ||
+                  formData.description.length >= 200
+                }
+              >
                 {editingTask ? 'Update' : 'Create'}
               </Button>
             </DialogActions>
@@ -365,6 +426,31 @@ const Dashboard = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog 
+          open={deleteDialogOpen} 
+          onClose={handleCloseDeleteDialog} 
+          maxWidth="sm" 
+          fullWidth
+          PaperProps={{ sx: { minWidth: 520, minHeight: 220 } }}
+        >
+          <DialogTitle>Delete Task</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1">
+              Are you sure you want to delete "{taskToDelete?.title}"?
+            </Typography>
+            {taskToDelete?.status === 'Pending' && (
+              <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+                This task is still Pending. Do you still want to delete it?
+              </Typography>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
+            <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
+          </DialogActions>
+        </Dialog>
       </Box>
   );
 };
