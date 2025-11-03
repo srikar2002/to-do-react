@@ -19,14 +19,13 @@ import {
   IconButton,
   Chip,
   CircularProgress,
-  FormControlLabel,
-  Switch,
   Snackbar,
   Alert,
   Select,
   MenuItem,
   FormControl,
-  InputLabel
+  InputLabel,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,7 +33,8 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   CheckCircle as CheckCircleIcon,
-  RadioButtonUnchecked as RadioButtonUncheckedIcon
+  RadioButtonUnchecked as RadioButtonUncheckedIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,8 +51,11 @@ const Dashboard = () => {
     title: '',
     description: '',
     date: 'today',
-    status: 'Pending'
+    status: 'Pending',
+    priority: 'Medium',
+    tags: []
   });
+  const [tagInput, setTagInput] = useState('');
   const [errors, setErrors] = useState({
     title: ''
   });
@@ -90,7 +93,9 @@ const Dashboard = () => {
         title: task.title,
         description: task.description,
         date: dateOption,
-        status: task.status
+        status: task.status,
+        priority: task.priority || 'Medium',
+        tags: task.tags || []
       });
     } else {
       setEditingTask(null);
@@ -98,8 +103,11 @@ const Dashboard = () => {
         title: '',
         description: '',
         date: 'today',
-        status: 'Pending'
+        status: 'Pending',
+        priority: 'Medium',
+        tags: []
       });
+      setTagInput('');
     }
     setOpenDialog(true);
   };
@@ -111,8 +119,11 @@ const Dashboard = () => {
       title: '',
       description: '',
       date: 'today',
-      status: 'Pending'
+      status: 'Pending',
+      priority: 'Medium',
+      tags: []
     });
+    setTagInput('');
     setErrors({ title: '' });
   };
 
@@ -157,7 +168,9 @@ const Dashboard = () => {
       title: formData.title,
       description: formData.description,
       date: actualDate,
-      status: formData.status
+      status: formData.status,
+      priority: formData.priority,
+      tags: formData.tags
     };
 
     if (editingTask) {
@@ -228,7 +241,8 @@ const Dashboard = () => {
     return 'Day After Tomorrow';
   };
 
-  if (loading) {
+  // Only show full-page loader on initial load (when dates are not set yet)
+  if (loading && !dates.today) {
     return (
       <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
         <CircularProgress />
@@ -403,6 +417,73 @@ const Dashboard = () => {
                   <MenuItem value="dayAfterTomorrow">Day After Tomorrow</MenuItem>
                 </Select>
               </FormControl>
+              <FormControl fullWidth sx={{ mb: 2 }}>
+                <InputLabel id="priority-select-label">Priority</InputLabel>
+                <Select
+                  labelId="priority-select-label"
+                  value={formData.priority}
+                  label="Priority"
+                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                >
+                  <MenuItem value="Low">Low</MenuItem>
+                  <MenuItem value="Medium">Medium</MenuItem>
+                  <MenuItem value="High">High</MenuItem>
+                </Select>
+              </FormControl>
+              <TextField
+                margin="dense"
+                label="Add Tag"
+                fullWidth
+                variant="outlined"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyPress={(e) => {
+                  if (e.key === 'Enter' && tagInput.trim()) {
+                    e.preventDefault();
+                    const trimmedTag = tagInput.trim();
+                    if (!formData.tags.includes(trimmedTag)) {
+                      setFormData({ ...formData, tags: [...formData.tags, trimmedTag] });
+                    }
+                    setTagInput('');
+                  }
+                }}
+                InputProps={{
+                  endAdornment: tagInput && (
+                    <InputAdornment position="end">
+                      <IconButton
+                        size="small"
+                        onClick={() => {
+                          const trimmedTag = tagInput.trim();
+                          if (trimmedTag && !formData.tags.includes(trimmedTag)) {
+                            setFormData({ ...formData, tags: [...formData.tags, trimmedTag] });
+                          }
+                          setTagInput('');
+                        }}
+                      >
+                        <AddIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+                sx={{ mb: 1 }}
+              />
+              {formData.tags.length > 0 && (
+                <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                  {formData.tags.map((tag, index) => (
+                    <Chip
+                      key={index}
+                      label={tag}
+                      size="small"
+                      onDelete={() => {
+                        setFormData({ ...formData, tags: formData.tags.filter((_, i) => i !== index) });
+                      }}
+                      deleteIcon={<CloseIcon />}
+                      color="primary"
+                      variant="outlined"
+                    />
+                  ))}
+                </Box>
+              )}
             </DialogContent>
             <DialogActions>
               <Button onClick={handleCloseDialog}>Cancel</Button>

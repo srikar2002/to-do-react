@@ -63,13 +63,25 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleStatus }) => {
                 </Typography>
               </Tooltip>
             )}
-            <Box mt={1} display="flex" gap={1} flexWrap="wrap">
+            <Box mt={1} display="flex" gap={1} flexWrap="wrap" alignItems="center">
               <Chip 
                 label={task.status} 
                 size="small" 
                 color={isCompleted ? 'success' : 'default'}
                 variant={isCompleted ? 'filled' : 'outlined'}
               />
+              {task.priority && (
+                <Chip 
+                  label={task.priority} 
+                  size="small" 
+                  color={
+                    task.priority === 'High' ? 'error' : 
+                    task.priority === 'Medium' ? 'warning' : 
+                    'default'
+                  }
+                  variant="outlined"
+                />
+              )}
               {task.rollover && (
                 <Chip 
                   label="Auto-rollover" 
@@ -78,6 +90,15 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleStatus }) => {
                   variant="outlined"
                 />
               )}
+              {task.tags && task.tags.length > 0 && task.tags.map((tag, index) => (
+                <Chip
+                  key={index}
+                  label={tag}
+                  size="small"
+                  color="primary"
+                  variant="outlined"
+                />
+              ))}
             </Box>
           </Box>
           <Box display="flex" flexDirection="column" gap={0.5}>

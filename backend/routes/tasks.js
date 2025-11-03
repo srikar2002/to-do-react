@@ -18,7 +18,7 @@ router.get('/', async (req, res) => {
     const tasks = await Task.find({
       userId: req.userId,
       date: { $in: [today, tomorrow, dayAfterTomorrow] }
-    }).sort({ date: 1, createdAt: 1 });
+    }).sort({ date: 1, order: 1, createdAt: 1 });
     
     // Group tasks by date
     const groupedTasks = {
@@ -44,7 +44,7 @@ router.get('/', async (req, res) => {
 // Create new task
 router.post('/', async (req, res) => {
   try {
-    const { title, description, date, status } = req.body;
+    const { title, description, date, status, priority, tags } = req.body;
     
     // Validation
     if (!title || !date) {
@@ -56,14 +56,29 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ message: 'Invalid date format. Use YYYY-MM-DD' });
     }
     
+    // Validate priority
+    if (priority && !['Low', 'Medium', 'High'].includes(priority)) {
+      return res.status(400).json({ message: 'Invalid priority. Must be Low, Medium, or High' });
+    }
+    
+    // Get the highest order for this date to append new task at the end
+    const maxOrderTask = await Task.findOne({
+      userId: req.userId,
+      date
+    }).sort({ order: -1 });
+    const nextOrder = maxOrderTask ? maxOrderTask.order + 1 : 0;
+    
     const task = new Task({
       userId: req.userId,
       title,
       description: description || '',
       date,
-      status: status || 'Pending'
+      status: status || 'Pending',
+      priority: priority || 'Medium',
+      tags: Array.isArray(tags) ? tags.filter(tag => tag && tag.trim()) : []
     });
     
+    task.order = nextOrder;
     await task.save();
     
     res.status(201).json({
@@ -79,7 +94,7 @@ router.post('/', async (req, res) => {
 // Update task
 router.put('/:id', async (req, res) => {
   try {
-    const { title, description, date, status } = req.body;
+    const { title, description, date, status, priority, tags, order } = req.body;
     const taskId = req.params.id;
     
     // Find task and verify ownership
@@ -113,6 +128,18 @@ router.put('/:id', async (req, res) => {
       task.date = date;
     }
     if (status !== undefined) task.status = status;
+    if (priority !== undefined) {
+      if (!['Low', 'Medium', 'High'].includes(priority)) {
+        return res.status(400).json({ message: 'Invalid priority. Must be Low, Medium, or High' });
+      }
+      task.priority = priority;
+    }
+    if (tags !== undefined) {
+      task.tags = Array.isArray(tags) ? tags.filter(tag => tag && tag.trim()) : [];
+    }
+    if (order !== undefined && typeof order === 'number') {
+      task.order = order;
+    }
     
     await task.save();
     
@@ -123,6 +150,32 @@ router.put('/:id', async (req, res) => {
   } catch (error) {
     console.error('Update task error:', error);
     res.status(500).json({ message: 'Server error while updating task' });
+  }
+});
+
+// Update task order (for drag-and-drop)
+router.patch('/reorder', async (req, res) => {
+  try {
+    const { taskIds } = req.body;
+    
+    if (!Array.isArray(taskIds)) {
+      return res.status(400).json({ message: 'taskIds must be an array' });
+    }
+    
+    // Update order for all tasks
+    const updatePromises = taskIds.map((taskId, index) => {
+      return Task.updateOne(
+        { _id: taskId, userId: req.userId },
+        { $set: { order: index } }
+      );
+    });
+    
+    await Promise.all(updatePromises);
+    
+    res.json({ message: 'Task order updated successfully' });
+  } catch (error) {
+    console.error('Reorder tasks error:', error);
+    res.status(500).json({ message: 'Server error while reordering tasks' });
   }
 });
 
