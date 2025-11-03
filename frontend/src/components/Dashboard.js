@@ -66,6 +66,12 @@ const Dashboard = () => {
 
   const handleOpenDialog = (task = null) => {
     if (task) {
+      // Prevent editing completed tasks
+      if (task.status === 'Completed') {
+        showSnackbar('Cannot edit completed tasks. Uncomplete it first to make changes.', 'warning');
+        return;
+      }
+      
       setEditingTask(task);
       // Convert task date to our dropdown format
       const taskDate = dayjs(task.date);

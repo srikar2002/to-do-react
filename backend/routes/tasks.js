@@ -88,7 +88,22 @@ router.put('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
     
-    // Update fields
+    // Prevent editing completed tasks (only allow status change back to Pending via toggle)
+    if (task.status === 'Completed') {
+      // Only allow status change from Completed to Pending
+      if (status !== undefined && status === 'Pending') {
+        task.status = status;
+        await task.save();
+        return res.json({
+          message: 'Task status updated successfully',
+          task
+        });
+      }
+      // Reject any other edits to completed tasks
+      return res.status(400).json({ message: 'Cannot edit a completed task. Uncomplete it first to make changes.' });
+    }
+    
+    // Update fields for non-completed tasks
     if (title !== undefined) task.title = title;
     if (description !== undefined) task.description = description;
     if (date !== undefined) {

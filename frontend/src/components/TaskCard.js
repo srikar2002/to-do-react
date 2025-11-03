@@ -88,9 +88,18 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleStatus }) => {
             >
               {isCompleted ? <CheckCircleIcon /> : <RadioButtonUncheckedIcon />}
             </IconButton>
-            <IconButton size="small" onClick={onEdit} color="primary">
-              <EditIcon />
-            </IconButton>
+            <Tooltip title={isCompleted ? 'Cannot edit completed tasks' : 'Edit task'}>
+              <span>
+                <IconButton 
+                  size="small" 
+                  onClick={onEdit} 
+                  color="primary"
+                  disabled={isCompleted}
+                >
+                  <EditIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
             <IconButton size="small" onClick={onDelete} color="error">
               <DeleteIcon />
             </IconButton>
