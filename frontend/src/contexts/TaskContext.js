@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import { useAuth } from './AuthContext';
@@ -27,7 +27,7 @@ export const TaskProvider = ({ children }) => {
   });
   const [loading, setLoading] = useState(false);
 
-  const fetchTasks = async () => {
+  const fetchTasks = useCallback(async () => {
     if (!user) {
       return;
     }
@@ -48,7 +48,7 @@ export const TaskProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id, user?.token]); // Trigger when user ID or token changes
 
   const createTask = async (taskData) => {
     if (!user) {
@@ -110,8 +110,20 @@ export const TaskProvider = ({ children }) => {
   useEffect(() => {
     if (user) {
       fetchTasks();
+    } else {
+      // Clear tasks when user logs out
+      setTasks({
+        today: [],
+        tomorrow: [],
+        dayAfterTomorrow: []
+      });
+      setDates({
+        today: '',
+        tomorrow: '',
+        dayAfterTomorrow: ''
+      });
     }
-  }, [user]);
+  }, [user?.id, user?.token, fetchTasks]); // Trigger when user ID, token, or fetchTasks changes
 
   const value = {
     tasks,
