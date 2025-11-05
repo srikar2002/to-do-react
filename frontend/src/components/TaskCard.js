@@ -12,11 +12,14 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   CheckCircle as CheckCircleIcon,
-  RadioButtonUnchecked as RadioButtonUncheckedIcon
+  RadioButtonUnchecked as RadioButtonUncheckedIcon,
+  Archive as ArchiveIcon,
+  Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
 
-const TaskCard = ({ task, onEdit, onDelete, onToggleStatus }) => {
+const TaskCard = ({ task, onEdit, onDelete, onToggleStatus, onArchive, onRestore, showArchive = true }) => {
   const isCompleted = task.status === 'Completed';
+  const isArchived = task.archived || false;
 
   return (
     <Card 
@@ -121,9 +124,25 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleStatus }) => {
                 </IconButton>
               </span>
             </Tooltip>
-            <IconButton size="small" onClick={onDelete} color="error">
-              <DeleteIcon />
-            </IconButton>
+            {showArchive && !isArchived && (
+              <Tooltip title="Archive task">
+                <IconButton size="small" onClick={onArchive} color="default">
+                  <ArchiveIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            {isArchived && onRestore && (
+              <Tooltip title="Restore task">
+                <IconButton size="small" onClick={onRestore} color="primary">
+                  <UnarchiveIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            {!isArchived && (
+              <IconButton size="small" onClick={onDelete} color="error">
+                <DeleteIcon />
+              </IconButton>
+            )}
           </Box>
         </Box>
       </CardContent>

@@ -17,15 +17,22 @@ router.get('/', async (req, res) => {
     
     const tasks = await Task.find({
       userId: req.userId,
-      date: { $in: [today, tomorrow, dayAfterTomorrow] }
+      date: { $in: [today, tomorrow, dayAfterTomorrow] },
+      archived: false
     }).sort({ date: 1, order: 1, createdAt: 1 });
     
-    // Group tasks by date
+    // Group tasks by date (more efficient than filtering)
     const groupedTasks = {
-      [today]: tasks.filter(task => task.date === today),
-      [tomorrow]: tasks.filter(task => task.date === tomorrow),
-      [dayAfterTomorrow]: tasks.filter(task => task.date === dayAfterTomorrow)
+      [today]: [],
+      [tomorrow]: [],
+      [dayAfterTomorrow]: []
     };
+    
+    tasks.forEach(task => {
+      if (groupedTasks.hasOwnProperty(task.date)) {
+        groupedTasks[task.date].push(task);
+      }
+    });
     
     res.json({
       tasks: groupedTasks,
@@ -203,10 +210,11 @@ router.post('/rollover-all', async (req, res) => {
     const today = dayjs().format('YYYY-MM-DD');
     const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
     
-    // Find all pending tasks from today for all users
+    // Find all pending tasks from today for all users (excluding archived)
     const tasksToRollover = await Task.find({
       date: today,
-      status: 'Pending'
+      status: 'Pending',
+      archived: false
     });
     
     if (tasksToRollover.length === 0) {
@@ -216,11 +224,12 @@ router.post('/rollover-all', async (req, res) => {
       });
     }
     
-    // Update all pending tasks to tomorrow's date
+    // Update all pending tasks to tomorrow's date (excluding archived)
     const updateResult = await Task.updateMany(
       {
         date: today,
-        status: 'Pending'
+        status: 'Pending',
+        archived: false
       },
       {
         $set: { date: tomorrow }
@@ -234,6 +243,74 @@ router.post('/rollover-all', async (req, res) => {
   } catch (error) {
     console.error('Rollover all tasks error:', error);
     res.status(500).json({ message: 'Server error while rolling over all tasks' });
+  }
+});
+
+// Archive task
+router.post('/:id/archive', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    
+    const task = await Task.findOne({ _id: taskId, userId: req.userId });
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+    
+    task.archived = true;
+    await task.save();
+    
+    res.json({
+      message: 'Task archived successfully',
+      task
+    });
+  } catch (error) {
+    console.error('Archive task error:', error);
+    res.status(500).json({ message: 'Server error while archiving task' });
+  }
+});
+
+// Get archived tasks
+router.get('/archived', async (req, res) => {
+  try {
+    const tasks = await Task.find({
+      userId: req.userId,
+      archived: true
+    }).sort({ date: -1, createdAt: -1 });
+    
+    res.json({
+      tasks,
+      count: tasks.length
+    });
+  } catch (error) {
+    console.error('Get archived tasks error:', error);
+    res.status(500).json({ message: 'Server error while fetching archived tasks' });
+  }
+});
+
+// Restore archived task
+router.post('/:id/restore', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    
+    const task = await Task.findOne({ _id: taskId, userId: req.userId });
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+    
+    if (!task.archived) {
+      return res.status(400).json({ message: 'Task is not archived' });
+    }
+    
+    task.archived = false;
+    await task.save();
+    
+    res.json({
+      message: 'Task restored successfully',
+      task
+    });
+  } catch (error) {
+    console.error('Restore task error:', error);
+    res.status(500).json({ message: 'Server error while restoring task' });
   }
 });
 

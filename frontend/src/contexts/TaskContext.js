@@ -25,10 +25,11 @@ export const TaskProvider = ({ children }) => {
     tomorrow: '',
     dayAfterTomorrow: ''
   });
+  const [archivedTasks, setArchivedTasks] = useState([]);
   const [loading, setLoading] = useState(false);
 
   const fetchTasks = useCallback(async () => {
-    if (!user) {
+    if (!user || !user.id || !user.token) {
       return;
     }
     
@@ -45,10 +46,16 @@ export const TaskProvider = ({ children }) => {
       setDates(datesData);
     } catch (error) {
       console.error('Error fetching tasks:', error);
+      // Clear tasks on error to avoid showing stale data
+      setTasks({
+        today: [],
+        tomorrow: [],
+        dayAfterTomorrow: []
+      });
     } finally {
       setLoading(false);
     }
-  }, [user?.id, user?.token]); // Trigger when user ID or token changes
+  }, [user]); // Trigger when user object changes
 
   const createTask = async (taskData) => {
     if (!user) {
@@ -107,8 +114,58 @@ export const TaskProvider = ({ children }) => {
     return await updateTask(taskId, { status: newStatus });
   };
 
+  const archiveTask = async (taskId) => {
+    if (!user) {
+      return { success: false, message: 'User not authenticated' };
+    }
+    
+    try {
+      const response = await axios.post(`/api/tasks/${taskId}/archive`);
+      await fetchTasks(); // Refresh main tasks
+      return { success: true, task: response.data.task };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Failed to archive task' 
+      };
+    }
+  };
+
+  const fetchArchivedTasks = useCallback(async () => {
+    if (!user || !user.id || !user.token) {
+      setArchivedTasks([]);
+      return;
+    }
+    
+    try {
+      const response = await axios.get('/api/tasks/archived');
+      setArchivedTasks(response.data.tasks || []);
+    } catch (error) {
+      console.error('Error fetching archived tasks:', error);
+      setArchivedTasks([]);
+    }
+  }, [user]);
+
+  const restoreTask = async (taskId) => {
+    if (!user) {
+      return { success: false, message: 'User not authenticated' };
+    }
+    
+    try {
+      const response = await axios.post(`/api/tasks/${taskId}/restore`);
+      await fetchArchivedTasks(); // Refresh archived tasks
+      await fetchTasks(); // Refresh main tasks
+      return { success: true, task: response.data.task };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Failed to restore task' 
+      };
+    }
+  };
+
   useEffect(() => {
-    if (user) {
+    if (user && user.id && user.token) {
       fetchTasks();
     } else {
       // Clear tasks when user logs out
@@ -122,18 +179,23 @@ export const TaskProvider = ({ children }) => {
         tomorrow: '',
         dayAfterTomorrow: ''
       });
+      setArchivedTasks([]); // Also clear archived tasks
     }
-  }, [user?.id, user?.token, fetchTasks]); // Trigger when user ID, token, or fetchTasks changes
+  }, [user, fetchTasks]); // Trigger when user object or fetchTasks changes
 
   const value = {
     tasks,
     dates,
+    archivedTasks,
     loading,
     fetchTasks,
+    fetchArchivedTasks,
     createTask,
     updateTask,
     deleteTask,
-    toggleTaskStatus
+    toggleTaskStatus,
+    archiveTask,
+    restoreTask
   };
 
   return (

@@ -25,7 +25,9 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  InputAdornment
+  InputAdornment,
+  Tabs,
+  Tab
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,7 +45,7 @@ import TaskCard from './TaskCard';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
-  const { tasks, dates, loading, createTask, updateTask, deleteTask, toggleTaskStatus } = useTasks();
+  const { tasks, dates, archivedTasks, loading, createTask, updateTask, deleteTask, toggleTaskStatus, archiveTask, restoreTask, fetchArchivedTasks } = useTasks();
   
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -66,9 +68,15 @@ const Dashboard = () => {
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
+  const [currentTab, setCurrentTab] = useState(0);
 
   const handleOpenDialog = (task = null) => {
     if (task) {
+      // Prevent editing archived tasks
+      if (task.archived) {
+        showSnackbar('Cannot edit archived tasks. Restore it first to make changes.', 'warning');
+        return;
+      }
       // Prevent editing completed tasks
       if (task.status === 'Completed') {
         showSnackbar('Cannot edit completed tasks. Uncomplete it first to make changes.', 'warning');
@@ -219,6 +227,38 @@ const Dashboard = () => {
     await toggleTaskStatus(taskId, currentStatus);
   };
 
+  const handleArchive = async (task) => {
+    const result = await archiveTask(task._id);
+    if (result.success) {
+      showSnackbar('Task archived successfully', 'success');
+      // Refresh archived tasks to update the count
+      await fetchArchivedTasks();
+    } else {
+      showSnackbar(result.message || 'Failed to archive task', 'error');
+    }
+  };
+
+  const handleRestore = async (task) => {
+    const result = await restoreTask(task._id);
+    if (result.success) {
+      showSnackbar('Task restored successfully', 'success');
+      // If we're on the archive tab, refresh archived tasks
+      if (currentTab === 1) {
+        await fetchArchivedTasks();
+      }
+    } else {
+      showSnackbar(result.message || 'Failed to restore task', 'error');
+    }
+  };
+
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
+    if (newValue === 1) {
+      // Fetch archived tasks when switching to archive tab
+      fetchArchivedTasks();
+    }
+  };
+
 
   const showSnackbar = (message, severity) => {
     setSnackbar({ open: true, message, severity });
@@ -267,6 +307,14 @@ const Dashboard = () => {
         </AppBar>
 
         <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+          <Box sx={{ mb: 3 }}>
+            <Tabs value={currentTab} onChange={handleTabChange} aria-label="task tabs">
+              <Tab label="Tasks" />
+              <Tab label={`Archived (${archivedTasks.length})`} />
+            </Tabs>
+          </Box>
+
+          {currentTab === 0 && (
           <Grid container spacing={3}>
             {/* Today */}
             <Grid item xs={12} md={4}>
@@ -284,6 +332,7 @@ const Dashboard = () => {
                       onEdit={() => handleOpenDialog(task)}
                       onDelete={() => handleRequestDelete(task)}
                       onToggleStatus={() => handleToggleStatus(task._id, task.status)}
+                      onArchive={() => handleArchive(task)}
                     />
                   ))}
                   {tasks.today.length === 0 && (
@@ -311,6 +360,7 @@ const Dashboard = () => {
                       onEdit={() => handleOpenDialog(task)}
                       onDelete={() => handleRequestDelete(task)}
                       onToggleStatus={() => handleToggleStatus(task._id, task.status)}
+                      onArchive={() => handleArchive(task)}
                     />
                   ))}
                   {tasks.tomorrow.length === 0 && (
@@ -338,6 +388,7 @@ const Dashboard = () => {
                       onEdit={() => handleOpenDialog(task)}
                       onDelete={() => handleRequestDelete(task)}
                       onToggleStatus={() => handleToggleStatus(task._id, task.status)}
+                      onArchive={() => handleArchive(task)}
                     />
                   ))}
                   {tasks.dayAfterTomorrow.length === 0 && (
@@ -349,17 +400,51 @@ const Dashboard = () => {
               </Card>
             </Grid>
           </Grid>
+          )}
+
+          {currentTab === 1 && (
+            <Card>
+              <CardHeader
+                title="Archived Tasks"
+                subheader={`${archivedTasks.length} archived task${archivedTasks.length !== 1 ? 's' : ''}`}
+                sx={{ backgroundColor: '#fff3e0' }}
+              />
+              <CardContent>
+                {archivedTasks.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 4 }}>
+                    No archived tasks
+                  </Typography>
+                ) : (
+                  <Box>
+                    {archivedTasks.map((task) => (
+                      <TaskCard
+                        key={task._id}
+                        task={task}
+                        onEdit={() => handleOpenDialog(task)}
+                        onDelete={() => handleRequestDelete(task)}
+                        onToggleStatus={() => handleToggleStatus(task._id, task.status)}
+                        onRestore={() => handleRestore(task)}
+                        showArchive={false}
+                      />
+                    ))}
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </Container>
 
-        {/* Floating Action Button */}
-        <Fab
-          color="primary"
-          aria-label="add"
-          sx={{ position: 'fixed', bottom: 16, right: 16 }}
-          onClick={() => handleOpenDialog()}
-        >
-          <AddIcon />
-        </Fab>
+        {/* Floating Action Button - only show on Tasks tab */}
+        {currentTab === 0 && (
+          <Fab
+            color="primary"
+            aria-label="add"
+            sx={{ position: 'fixed', bottom: 16, right: 16 }}
+            onClick={() => handleOpenDialog()}
+          >
+            <AddIcon />
+          </Fab>
+        )}
 
         {/* Task Dialog */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
