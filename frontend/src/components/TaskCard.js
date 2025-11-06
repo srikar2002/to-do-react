@@ -16,9 +16,10 @@ import {
   Archive as ArchiveIcon,
   Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
+import { TaskStatus, TaskPriority } from '../constants/enums';
 
 const TaskCard = ({ task, onEdit, onDelete, onToggleStatus, onArchive, onRestore, showArchive = true }) => {
-  const isCompleted = task.status === 'Completed';
+  const isCompleted = task.status === TaskStatus.COMPLETED;
   const isArchived = task.archived || false;
 
   return (
@@ -78,8 +79,8 @@ const TaskCard = ({ task, onEdit, onDelete, onToggleStatus, onArchive, onRestore
                   label={task.priority} 
                   size="small" 
                   color={
-                    task.priority === 'High' ? 'error' : 
-                    task.priority === 'Medium' ? 'warning' : 
+                    task.priority === TaskPriority.HIGH ? 'error' : 
+                    task.priority === TaskPriority.MEDIUM ? 'warning' : 
                     'default'
                   }
                   variant="outlined"

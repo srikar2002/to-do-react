@@ -42,6 +42,18 @@ import dayjs from 'dayjs';
 import { useAuth } from '../contexts/AuthContext';
 import { useTasks } from '../contexts/TaskContext';
 import TaskCard from './TaskCard';
+import {
+  TaskStatus,
+  TaskPriority,
+  DateOption,
+  SnackbarSeverity,
+  ValidationLimits,
+  DayLabels,
+  DefaultValues,
+  SuccessMessages,
+  ErrorMessages,
+  ValidationMessages
+} from '../constants/enums';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -52,9 +64,9 @@ const Dashboard = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    date: 'today',
-    status: 'Pending',
-    priority: 'Medium',
+    date: DefaultValues.DATE,
+    status: DefaultValues.STATUS,
+    priority: DefaultValues.PRIORITY,
     tags: []
   });
   const [tagInput, setTagInput] = useState('');
@@ -64,7 +76,7 @@ const Dashboard = () => {
   const [snackbar, setSnackbar] = useState({
     open: false,
     message: '',
-    severity: 'success'
+    severity: SnackbarSeverity.SUCCESS
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
@@ -74,12 +86,12 @@ const Dashboard = () => {
     if (task) {
       // Prevent editing archived tasks
       if (task.archived) {
-        showSnackbar('Cannot edit archived tasks. Restore it first to make changes.', 'warning');
+        showSnackbar(ErrorMessages.CANNOT_EDIT_ARCHIVED, SnackbarSeverity.WARNING);
         return;
       }
       // Prevent editing completed tasks
-      if (task.status === 'Completed') {
-        showSnackbar('Cannot edit completed tasks. Uncomplete it first to make changes.', 'warning');
+      if (task.status === TaskStatus.COMPLETED) {
+        showSnackbar(ErrorMessages.CANNOT_EDIT_COMPLETED, SnackbarSeverity.WARNING);
         return;
       }
       
@@ -90,11 +102,11 @@ const Dashboard = () => {
       const tomorrow = dayjs().add(1, 'day');
       const dayAfterTomorrow = dayjs().add(2, 'day');
       
-      let dateOption = 'today';
+      let dateOption = DateOption.TODAY;
       if (taskDate.isSame(tomorrow, 'day')) {
-        dateOption = 'tomorrow';
+        dateOption = DateOption.TOMORROW;
       } else if (taskDate.isSame(dayAfterTomorrow, 'day')) {
-        dateOption = 'dayAfterTomorrow';
+        dateOption = DateOption.DAY_AFTER_TOMORROW;
       }
       
       setFormData({
@@ -102,7 +114,7 @@ const Dashboard = () => {
         description: task.description,
         date: dateOption,
         status: task.status,
-        priority: task.priority || 'Medium',
+        priority: task.priority || DefaultValues.PRIORITY,
         tags: task.tags || []
       });
     } else {
@@ -110,9 +122,9 @@ const Dashboard = () => {
       setFormData({
         title: '',
         description: '',
-        date: 'today',
-        status: 'Pending',
-        priority: 'Medium',
+        date: DefaultValues.DATE,
+        status: DefaultValues.STATUS,
+        priority: DefaultValues.PRIORITY,
         tags: []
       });
       setTagInput('');
@@ -126,9 +138,9 @@ const Dashboard = () => {
     setFormData({
       title: '',
       description: '',
-      date: 'today',
-      status: 'Pending',
-      priority: 'Medium',
+      date: DefaultValues.DATE,
+      status: DefaultValues.STATUS,
+      priority: DefaultValues.PRIORITY,
       tags: []
     });
     setTagInput('');
@@ -141,31 +153,31 @@ const Dashboard = () => {
     // Custom validations
     const nextErrors = { title: '' };
     const isTitleEmpty = formData.title.trim().length === 0;
-    const titleTooLong = formData.title.trim().length > 50;
-    const descriptionTooLong = formData.description.trim().length > 200;
+    const titleTooLong = formData.title.trim().length > ValidationLimits.TITLE_MAX_LENGTH;
+    const descriptionTooLong = formData.description.trim().length > ValidationLimits.DESCRIPTION_MAX_LENGTH;
 
     if (isTitleEmpty) {
-      nextErrors.title = 'Title is required';
+      nextErrors.title = ValidationMessages.TITLE_REQUIRED;
     } else if (titleTooLong) {
-      nextErrors.title = 'Max 50 characters';
+      nextErrors.title = ValidationMessages.TITLE_MAX_LENGTH;
     }
 
     setErrors(nextErrors);
     if (nextErrors.title || descriptionTooLong) {
-      showSnackbar('Please fix validation errors before submitting', 'error');
+      showSnackbar(ErrorMessages.VALIDATION_ERRORS, SnackbarSeverity.ERROR);
       return;
     }
     
     // Convert dropdown selection to actual date
     let actualDate;
     switch (formData.date) {
-      case 'today':
+      case DateOption.TODAY:
         actualDate = dayjs().format('YYYY-MM-DD');
         break;
-      case 'tomorrow':
+      case DateOption.TOMORROW:
         actualDate = dayjs().add(1, 'day').format('YYYY-MM-DD');
         break;
-      case 'dayAfterTomorrow':
+      case DateOption.DAY_AFTER_TOMORROW:
         actualDate = dayjs().add(2, 'day').format('YYYY-MM-DD');
         break;
       default:
@@ -186,18 +198,18 @@ const Dashboard = () => {
       const result = await updateTask(editingTask._id, taskData);
       if (result.success) {
         handleCloseDialog();
-        showSnackbar('Task updated successfully', 'success');
+        showSnackbar(SuccessMessages.TASK_UPDATED, SnackbarSeverity.SUCCESS);
       } else {
-        showSnackbar(result.message || 'Failed to update task', 'error');
+        showSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, SnackbarSeverity.ERROR);
       }
     } else {
       // Create new task
       const result = await createTask(taskData);
       if (result.success) {
         handleCloseDialog();
-        showSnackbar('Task created successfully', 'success');
+        showSnackbar(SuccessMessages.TASK_CREATED, SnackbarSeverity.SUCCESS);
       } else {
-        showSnackbar(result.message || 'Failed to create task', 'error');
+        showSnackbar(result.message || ErrorMessages.TASK_CREATE_FAILED, SnackbarSeverity.ERROR);
       }
     }
   };
@@ -216,9 +228,9 @@ const Dashboard = () => {
     if (!taskToDelete) return;
     const result = await deleteTask(taskToDelete._id);
     if (result?.success) {
-      showSnackbar('Task deleted successfully', 'success');
+      showSnackbar(SuccessMessages.TASK_DELETED, SnackbarSeverity.SUCCESS);
     } else {
-      showSnackbar(result?.message || 'Failed to delete task', 'error');
+      showSnackbar(result?.message || ErrorMessages.TASK_DELETE_FAILED, SnackbarSeverity.ERROR);
     }
     handleCloseDeleteDialog();
   };
@@ -230,24 +242,24 @@ const Dashboard = () => {
   const handleArchive = async (task) => {
     const result = await archiveTask(task._id);
     if (result.success) {
-      showSnackbar('Task archived successfully', 'success');
+      showSnackbar(SuccessMessages.TASK_ARCHIVED, SnackbarSeverity.SUCCESS);
       // Refresh archived tasks to update the count
       await fetchArchivedTasks();
     } else {
-      showSnackbar(result.message || 'Failed to archive task', 'error');
+      showSnackbar(result.message || ErrorMessages.TASK_ARCHIVE_FAILED, SnackbarSeverity.ERROR);
     }
   };
 
   const handleRestore = async (task) => {
     const result = await restoreTask(task._id);
     if (result.success) {
-      showSnackbar('Task restored successfully', 'success');
+      showSnackbar(SuccessMessages.TASK_RESTORED, SnackbarSeverity.SUCCESS);
       // If we're on the archive tab, refresh archived tasks
       if (currentTab === 1) {
         await fetchArchivedTasks();
       }
     } else {
-      showSnackbar(result.message || 'Failed to restore task', 'error');
+      showSnackbar(result.message || ErrorMessages.TASK_RESTORE_FAILED, SnackbarSeverity.ERROR);
     }
   };
 
@@ -276,9 +288,9 @@ const Dashboard = () => {
     const today = dayjs().format('YYYY-MM-DD');
     const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
     
-    if (dateString === today) return 'Today';
-    if (dateString === tomorrow) return 'Tomorrow';
-    return 'Day After Tomorrow';
+    if (dateString === today) return DayLabels.TODAY;
+    if (dateString === tomorrow) return DayLabels.TOMORROW;
+    return DayLabels.DAY_AFTER_TOMORROW;
   };
 
   // Only show full-page loader on initial load (when dates are not set yet)
@@ -462,14 +474,14 @@ const Dashboard = () => {
                 value={formData.title}
                 onChange={(e) => {
                   const next = e.target.value || '';
-                  const capped = next.length > 50 ? next.slice(0, 50) : next;
+                  const capped = next.length > ValidationLimits.TITLE_MAX_LENGTH ? next.slice(0, ValidationLimits.TITLE_MAX_LENGTH) : next;
                   setFormData({ ...formData, title: capped });
-                  if (errors.title && capped.trim().length > 0 && capped.trim().length <= 50) {
+                  if (errors.title && capped.trim().length > 0 && capped.trim().length <= ValidationLimits.TITLE_MAX_LENGTH) {
                     setErrors({ ...errors, title: '' });
                   }
                 }}
-                error={Boolean(errors.title) || (formData.title.length >= 50 && formData.title.length > 0)}
-                helperText={errors.title || (formData.title.length >= 50 && formData.title.length > 0 ? "Max 50 characters reached" : '')}
+                error={Boolean(errors.title) || (formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH && formData.title.length > 0)}
+                helperText={errors.title || (formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH && formData.title.length > 0 ? ValidationMessages.TITLE_MAX_REACHED : '')}
                 sx={{ mb: 2 }}
               />
               <TextField
@@ -482,11 +494,11 @@ const Dashboard = () => {
                 value={formData.description}
                 onChange={(e) => {
                   const next = e.target.value || '';
-                  const capped = next.length > 200 ? next.slice(0, 200) : next;
+                  const capped = next.length > ValidationLimits.DESCRIPTION_MAX_LENGTH ? next.slice(0, ValidationLimits.DESCRIPTION_MAX_LENGTH) : next;
                   setFormData({ ...formData, description: capped });
                 }}
-                error={formData.description.length >= 200 && formData.description.length > 0}
-                helperText={formData.description.length >= 200 && formData.description.length > 0 ? "Max 200 characters reached" : ''}
+                error={formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH && formData.description.length > 0}
+                helperText={formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH && formData.description.length > 0 ? ValidationMessages.DESCRIPTION_MAX_REACHED : ''}
                 sx={{ mb: 2 }}
               />
               <FormControl fullWidth sx={{ mb: 2 }}>
@@ -497,9 +509,9 @@ const Dashboard = () => {
                   label="Date"
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 >
-                  <MenuItem value="today">Today</MenuItem>
-                  <MenuItem value="tomorrow">Tomorrow</MenuItem>
-                  <MenuItem value="dayAfterTomorrow">Day After Tomorrow</MenuItem>
+                  <MenuItem value={DateOption.TODAY}>{DayLabels.TODAY}</MenuItem>
+                  <MenuItem value={DateOption.TOMORROW}>{DayLabels.TOMORROW}</MenuItem>
+                  <MenuItem value={DateOption.DAY_AFTER_TOMORROW}>{DayLabels.DAY_AFTER_TOMORROW}</MenuItem>
                 </Select>
               </FormControl>
               <FormControl fullWidth sx={{ mb: 2 }}>
@@ -510,9 +522,9 @@ const Dashboard = () => {
                   label="Priority"
                   onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
                 >
-                  <MenuItem value="Low">Low</MenuItem>
-                  <MenuItem value="Medium">Medium</MenuItem>
-                  <MenuItem value="High">High</MenuItem>
+                  <MenuItem value={TaskPriority.LOW}>{TaskPriority.LOW}</MenuItem>
+                  <MenuItem value={TaskPriority.MEDIUM}>{TaskPriority.MEDIUM}</MenuItem>
+                  <MenuItem value={TaskPriority.HIGH}>{TaskPriority.HIGH}</MenuItem>
                 </Select>
               </FormControl>
               <TextField
@@ -577,8 +589,8 @@ const Dashboard = () => {
                 variant="contained"
                 disabled={
                   formData.title.trim().length === 0 ||
-                  formData.title.length >= 50 ||
-                  formData.description.length >= 200
+                  formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH ||
+                  formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH
                 }
               >
                 {editingTask ? 'Update' : 'Create'}
@@ -612,7 +624,7 @@ const Dashboard = () => {
             <Typography variant="body1">
               Are you sure you want to delete "{taskToDelete?.title}"?
             </Typography>
-            {taskToDelete?.status === 'Pending' && (
+            {taskToDelete?.status === TaskStatus.PENDING && (
               <Typography variant="body2" color="error" sx={{ mt: 1 }}>
                 This task is still Pending. Do you still want to delete it?
               </Typography>

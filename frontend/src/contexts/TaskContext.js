@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import axios from 'axios';
 import dayjs from 'dayjs';
 import { useAuth } from './AuthContext';
+import { TaskStatus } from '../constants/enums';
 
 const TaskContext = createContext();
 
@@ -110,7 +111,7 @@ export const TaskProvider = ({ children }) => {
   };
 
   const toggleTaskStatus = async (taskId, currentStatus) => {
-    const newStatus = currentStatus === 'Pending' ? 'Completed' : 'Pending';
+    const newStatus = currentStatus === TaskStatus.PENDING ? TaskStatus.COMPLETED : TaskStatus.PENDING;
     return await updateTask(taskId, { status: newStatus });
   };
 
