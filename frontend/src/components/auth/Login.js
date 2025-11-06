@@ -8,8 +8,13 @@ import {
   Typography,
   Box,
   Link,
-  Alert
+  Alert,
+  IconButton,
+  ThemeProvider,
+  createTheme,
+  CssBaseline
 } from '@mui/material';
+import { Brightness4, Brightness7 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Login = () => {
@@ -19,9 +24,20 @@ const Login = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   
   const { login } = useAuth();
   const navigate = useNavigate();
+
+  const theme = createTheme({
+    palette: {
+      mode: darkMode ? 'dark' : 'light',
+    },
+  });
+
+  const toggleTheme = () => {
+    setDarkMode(!darkMode);
+  };
 
   const handleChange = (e) => {
     setFormData({
@@ -48,19 +64,33 @@ const Login = () => {
   };
 
   return (
-    <Container component="main" maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
-          <Typography component="h1" variant="h4" align="center" gutterBottom>
-            Login
-          </Typography>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Container component="main" maxWidth="sm">
+        <Box
+          sx={{
+            marginTop: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            position: 'relative',
+          }}
+        >
+          <IconButton
+            onClick={toggleTheme}
+            sx={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+            }}
+            color="inherit"
+          >
+            {darkMode ? <Brightness7 /> : <Brightness4 />}
+          </IconButton>
+          <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
+            <Typography component="h1" variant="h4" align="center" gutterBottom>
+              Login
+            </Typography>
           
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -111,6 +141,7 @@ const Login = () => {
         </Paper>
       </Box>
     </Container>
+    </ThemeProvider>
   );
 };
 

@@ -8,8 +8,13 @@ import {
   Typography,
   Box,
   Link,
-  Alert
+  Alert,
+  IconButton,
+  ThemeProvider,
+  createTheme,
+  CssBaseline
 } from '@mui/material';
+import { Brightness4, Brightness7 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Register = () => {
@@ -21,9 +26,20 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [darkMode, setDarkMode] = useState(false);
   
   const { register } = useAuth();
   const navigate = useNavigate();
+
+  const theme = createTheme({
+    palette: {
+      mode: darkMode ? 'dark' : 'light',
+    },
+  });
+
+  const toggleTheme = () => {
+    setDarkMode(!darkMode);
+  };
 
   const handleChange = (e) => {
     setFormData({
@@ -63,19 +79,33 @@ const Register = () => {
   };
 
   return (
-    <Container component="main" maxWidth="sm">
-      <Box
-        sx={{
-          marginTop: 8,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-        }}
-      >
-        <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
-          <Typography component="h1" variant="h4" align="center" gutterBottom>
-            Register
-          </Typography>
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Container component="main" maxWidth="sm">
+        <Box
+          sx={{
+            marginTop: 8,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            position: 'relative',
+          }}
+        >
+          <IconButton
+            onClick={toggleTheme}
+            sx={{
+              position: 'absolute',
+              top: 16,
+              right: 16,
+            }}
+            color="inherit"
+          >
+            {darkMode ? <Brightness7 /> : <Brightness4 />}
+          </IconButton>
+          <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
+            <Typography component="h1" variant="h4" align="center" gutterBottom>
+              Register
+            </Typography>
           
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -149,6 +179,7 @@ const Register = () => {
         </Paper>
       </Box>
     </Container>
+    </ThemeProvider>
   );
 };
 
