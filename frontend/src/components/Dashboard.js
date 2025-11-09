@@ -36,7 +36,9 @@ import {
   Delete as DeleteIcon,
   CheckCircle as CheckCircleIcon,
   RadioButtonUnchecked as RadioButtonUncheckedIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  Brightness4 as Brightness4Icon,
+  Brightness7 as Brightness7Icon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import {
@@ -57,6 +59,7 @@ import {
 } from '@dnd-kit/sortable';
 import { useAuth } from '../contexts/AuthContext';
 import { useTasks } from '../contexts/TaskContext';
+import { useTheme } from '../contexts/ThemeContext';
 import TaskCard from './TaskCard';
 import {
   TaskStatus,
@@ -74,6 +77,7 @@ import {
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const { tasks, dates, archivedTasks, loading, createTask, updateTask, deleteTask, toggleTaskStatus, archiveTask, restoreTask, fetchArchivedTasks } = useTasks();
+  const { darkMode, toggleTheme } = useTheme();
   
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -463,6 +467,9 @@ const Dashboard = () => {
             <Typography variant="body1" sx={{ mr: 2 }}>
               Welcome, {user?.name}!
             </Typography>
+            <IconButton color="inherit" onClick={toggleTheme} sx={{ mr: 1 }}>
+              {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
+            </IconButton>
             <Button color="inherit" onClick={logout} startIcon={<LogoutIcon />}>
               Logout
             </Button>
@@ -492,7 +499,9 @@ const Dashboard = () => {
                   <CardHeader
                     title={getDayLabel(dates.today)}
                     subheader={formatDate(dates.today)}
-                    sx={{ backgroundColor: '#e3f2fd' }}
+                    sx={{ 
+                      backgroundColor: darkMode ? 'rgba(25, 118, 210, 0.2)' : '#e3f2fd'
+                    }}
                   />
                   <SortableContext
                     items={tasks.today.map(task => task._id)}
@@ -534,7 +543,9 @@ const Dashboard = () => {
                   <CardHeader
                     title={getDayLabel(dates.tomorrow)}
                     subheader={formatDate(dates.tomorrow)}
-                    sx={{ backgroundColor: '#f3e5f5' }}
+                    sx={{ 
+                      backgroundColor: darkMode ? 'rgba(156, 39, 176, 0.2)' : '#f3e5f5'
+                    }}
                   />
                   <SortableContext
                     items={tasks.tomorrow.map(task => task._id)}
@@ -576,7 +587,9 @@ const Dashboard = () => {
                   <CardHeader
                     title={getDayLabel(dates.dayAfterTomorrow)}
                     subheader={formatDate(dates.dayAfterTomorrow)}
-                    sx={{ backgroundColor: '#e8f5e8' }}
+                    sx={{ 
+                      backgroundColor: darkMode ? 'rgba(76, 175, 80, 0.2)' : '#e8f5e8'
+                    }}
                   />
                   <SortableContext
                     items={tasks.dayAfterTomorrow.map(task => task._id)}
@@ -643,7 +656,9 @@ const Dashboard = () => {
               <CardHeader
                 title="Archived Tasks"
                 subheader={`${archivedTasks.length} archived task${archivedTasks.length !== 1 ? 's' : ''}`}
-                sx={{ backgroundColor: '#fff3e0' }}
+                sx={{ 
+                  backgroundColor: darkMode ? 'rgba(255, 152, 0, 0.2)' : '#fff3e0'
+                }}
               />
               <CardContent>
                 {archivedTasks.length === 0 ? (

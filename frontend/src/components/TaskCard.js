@@ -6,7 +6,8 @@ import {
   IconButton,
   Box,
   Chip,
-  Tooltip
+  Tooltip,
+  useTheme
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -21,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { TaskStatus, TaskPriority } from '../constants/enums';
 
 const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive, onRestore, showArchive = true }) => {
+  const theme = useTheme();
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isArchived = task.archived || false;
   
@@ -56,7 +58,9 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
       {...attributes}
       sx={{ 
         mb: 2, 
-        backgroundColor: isCompleted ? '#f5f5f5' : 'white',
+        backgroundColor: isCompleted 
+          ? (theme.palette.mode === 'dark' ? 'rgba(255, 255, 255, 0.05)' : '#f5f5f5')
+          : 'background.paper',
         '&:hover': {
           boxShadow: isCompleted || isArchived ? 1 : 4
         }

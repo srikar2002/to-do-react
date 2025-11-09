@@ -9,13 +9,11 @@ import {
   Box,
   Link,
   Alert,
-  IconButton,
-  ThemeProvider,
-  createTheme,
-  CssBaseline
+  IconButton
 } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -24,20 +22,10 @@ const Login = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
   
   const { login } = useAuth();
+  const { darkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
-
-  const theme = createTheme({
-    palette: {
-      mode: darkMode ? 'dark' : 'light',
-    },
-  });
-
-  const toggleTheme = () => {
-    setDarkMode(!darkMode);
-  };
 
   const handleChange = (e) => {
     setFormData({
@@ -64,9 +52,7 @@ const Login = () => {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Container component="main" maxWidth="sm">
+    <Container component="main" maxWidth="sm">
         <Box
           sx={{
             marginTop: 8,
@@ -141,7 +127,6 @@ const Login = () => {
         </Paper>
       </Box>
     </Container>
-    </ThemeProvider>
   );
 };
 

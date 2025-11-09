@@ -9,13 +9,11 @@ import {
   Box,
   Link,
   Alert,
-  IconButton,
-  ThemeProvider,
-  createTheme,
-  CssBaseline
+  IconButton
 } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
+import { useTheme } from '../../contexts/ThemeContext';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -26,20 +24,10 @@ const Register = () => {
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
   
   const { register } = useAuth();
+  const { darkMode, toggleTheme } = useTheme();
   const navigate = useNavigate();
-
-  const theme = createTheme({
-    palette: {
-      mode: darkMode ? 'dark' : 'light',
-    },
-  });
-
-  const toggleTheme = () => {
-    setDarkMode(!darkMode);
-  };
 
   const handleChange = (e) => {
     setFormData({
@@ -79,9 +67,7 @@ const Register = () => {
   };
 
   return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Container component="main" maxWidth="sm">
+    <Container component="main" maxWidth="sm">
         <Box
           sx={{
             marginTop: 8,
@@ -179,7 +165,6 @@ const Register = () => {
         </Paper>
       </Box>
     </Container>
-    </ThemeProvider>
   );
 };
 
