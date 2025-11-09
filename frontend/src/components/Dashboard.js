@@ -39,6 +39,22 @@ import {
   Close as CloseIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  useDroppable
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy
+} from '@dnd-kit/sortable';
 import { useAuth } from '../contexts/AuthContext';
 import { useTasks } from '../contexts/TaskContext';
 import TaskCard from './TaskCard';
@@ -81,6 +97,19 @@ const Dashboard = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
+  const [activeTask, setActiveTask] = useState(null);
+
+  // Configure sensors for drag and drop
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const handleOpenDialog = (task = null) => {
     if (task) {
@@ -271,6 +300,128 @@ const Dashboard = () => {
     }
   };
 
+  const handleDragStart = (event) => {
+    const { active } = event;
+    const taskId = active.id;
+    // Find the task from all task lists
+    const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
+    const task = allTasks.find(t => t._id === taskId);
+    setActiveTask(task);
+  };
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    setActiveTask(null);
+
+    if (!over) return;
+
+    const taskId = active.id;
+    const sourceDate = active.data.current?.date;
+    
+    // Determine target date - could be from task data or column data
+    let targetDate = over.data.current?.date;
+    if (!targetDate) {
+      // Check if over.id is a date (column drop)
+      const validDates = [dates.today, dates.tomorrow, dates.dayAfterTomorrow];
+      if (validDates.includes(over.id)) {
+        targetDate = over.id;
+      } else {
+        // It's a task, get its date
+        const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
+        const targetTask = allTasks.find(t => t._id === over.id);
+        if (targetTask) {
+          targetDate = targetTask.date;
+        }
+      }
+    }
+
+    // Find the task
+    const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
+    const task = allTasks.find(t => t._id === taskId);
+    
+    if (!task) return;
+
+    // Prevent dragging completed or archived tasks
+    if (task.status === TaskStatus.COMPLETED || task.archived) {
+      return;
+    }
+
+    if (!targetDate) return;
+
+    // If dropped in the same column, handle reordering
+    if (sourceDate === targetDate) {
+      const dateKey = sourceDate === dates.today ? 'today' : 
+                     sourceDate === dates.tomorrow ? 'tomorrow' : 'dayAfterTomorrow';
+      const taskList = tasks[dateKey];
+      const oldIndex = taskList.findIndex(t => t._id === taskId);
+      
+      // Check if dropped on another task or empty space
+      const targetTask = taskList.find(t => t._id === over.id);
+      let newIndex;
+      
+      if (targetTask) {
+        // Dropped on another task
+        newIndex = taskList.findIndex(t => t._id === over.id);
+      } else {
+        // Dropped on empty space in column, append to end
+        newIndex = taskList.length;
+      }
+
+      if (oldIndex !== newIndex && newIndex !== -1) {
+        const newTaskList = arrayMove(taskList, oldIndex, newIndex);
+        // Update order for all tasks in the list
+        const updatePromises = newTaskList.map((t, index) => {
+          return updateTask(t._id, { order: index });
+        });
+        await Promise.all(updatePromises);
+      }
+      return;
+    }
+
+    // If dropped in a different column, update the date
+    if (sourceDate !== targetDate) {
+      // Validate that targetDate is one of our three dates
+      const validDates = [dates.today, dates.tomorrow, dates.dayAfterTomorrow];
+      if (validDates.includes(targetDate)) {
+        const result = await updateTask(taskId, { date: targetDate });
+        if (result.success) {
+          showSnackbar(SuccessMessages.TASK_UPDATED, SnackbarSeverity.SUCCESS);
+        } else {
+          showSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, SnackbarSeverity.ERROR);
+        }
+      }
+    }
+  };
+
+  const handleDragCancel = () => {
+    setActiveTask(null);
+  };
+
+  // Droppable CardContent component
+  const DroppableCardContent = ({ date, children, sx }) => {
+    const { setNodeRef, isOver } = useDroppable({
+      id: date,
+      data: {
+        type: 'column',
+        date
+      }
+    });
+
+    return (
+      <CardContent
+        ref={setNodeRef}
+        sx={{
+          ...sx,
+          backgroundColor: isOver ? 'action.hover' : 'transparent',
+          transition: 'background-color 0.2s'
+        }}
+        data-date={date}
+      >
+        {children}
+      </CardContent>
+    );
+  };
+
 
   const showSnackbar = (message, severity) => {
     setSnackbar({ open: true, message, severity });
@@ -327,91 +478,164 @@ const Dashboard = () => {
           </Box>
 
           {currentTab === 0 && (
-          <Grid container spacing={3}>
-            {/* Today */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardHeader
-                  title={getDayLabel(dates.today)}
-                  subheader={formatDate(dates.today)}
-                  sx={{ backgroundColor: '#e3f2fd' }}
-                />
-                <CardContent sx={{ flexGrow: 1, overflow: 'auto' }}>
-                  {tasks.today.map((task) => (
-                    <TaskCard
-                      key={task._id}
-                      task={task}
-                      onEdit={() => handleOpenDialog(task)}
-                      onDelete={() => handleRequestDelete(task)}
-                      onToggleStatus={() => handleToggleStatus(task._id, task.status)}
-                      onArchive={() => handleArchive(task)}
-                    />
-                  ))}
-                  {tasks.today.length === 0 && (
-                    <Typography variant="body2" color="text.secondary" align="center">
-                      No tasks for today
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+            onDragCancel={handleDragCancel}
+          >
+            <Grid container spacing={3}>
+              {/* Today */}
+              <Grid item xs={12} md={4}>
+                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <CardHeader
+                    title={getDayLabel(dates.today)}
+                    subheader={formatDate(dates.today)}
+                    sx={{ backgroundColor: '#e3f2fd' }}
+                  />
+                  <SortableContext
+                    items={tasks.today.map(task => task._id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <DroppableCardContent
+                      date={dates.today}
+                      sx={{
+                        flexGrow: 1,
+                        overflow: 'auto',
+                        minHeight: 200
+                      }}
+                    >
+                      {tasks.today.map((task) => (
+                        <TaskCard
+                          key={task._id}
+                          id={task._id}
+                          task={task}
+                          date={dates.today}
+                          onEdit={() => handleOpenDialog(task)}
+                          onDelete={() => handleRequestDelete(task)}
+                          onToggleStatus={() => handleToggleStatus(task._id, task.status)}
+                          onArchive={() => handleArchive(task)}
+                        />
+                      ))}
+                      {tasks.today.length === 0 && (
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          No tasks for today
+                        </Typography>
+                      )}
+                    </DroppableCardContent>
+                  </SortableContext>
+                </Card>
+              </Grid>
 
-            {/* Tomorrow */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardHeader
-                  title={getDayLabel(dates.tomorrow)}
-                  subheader={formatDate(dates.tomorrow)}
-                  sx={{ backgroundColor: '#f3e5f5' }}
-                />
-                <CardContent sx={{ flexGrow: 1, overflow: 'auto' }}>
-                  {tasks.tomorrow.map((task) => (
-                    <TaskCard
-                      key={task._id}
-                      task={task}
-                      onEdit={() => handleOpenDialog(task)}
-                      onDelete={() => handleRequestDelete(task)}
-                      onToggleStatus={() => handleToggleStatus(task._id, task.status)}
-                      onArchive={() => handleArchive(task)}
-                    />
-                  ))}
-                  {tasks.tomorrow.length === 0 && (
-                    <Typography variant="body2" color="text.secondary" align="center">
-                      No tasks for tomorrow
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
-            </Grid>
+              {/* Tomorrow */}
+              <Grid item xs={12} md={4}>
+                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <CardHeader
+                    title={getDayLabel(dates.tomorrow)}
+                    subheader={formatDate(dates.tomorrow)}
+                    sx={{ backgroundColor: '#f3e5f5' }}
+                  />
+                  <SortableContext
+                    items={tasks.tomorrow.map(task => task._id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <DroppableCardContent
+                      date={dates.tomorrow}
+                      sx={{
+                        flexGrow: 1,
+                        overflow: 'auto',
+                        minHeight: 200
+                      }}
+                    >
+                      {tasks.tomorrow.map((task) => (
+                        <TaskCard
+                          key={task._id}
+                          id={task._id}
+                          task={task}
+                          date={dates.tomorrow}
+                          onEdit={() => handleOpenDialog(task)}
+                          onDelete={() => handleRequestDelete(task)}
+                          onToggleStatus={() => handleToggleStatus(task._id, task.status)}
+                          onArchive={() => handleArchive(task)}
+                        />
+                      ))}
+                      {tasks.tomorrow.length === 0 && (
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          No tasks for tomorrow
+                        </Typography>
+                      )}
+                    </DroppableCardContent>
+                  </SortableContext>
+                </Card>
+              </Grid>
 
-            {/* Day After Tomorrow */}
-            <Grid item xs={12} md={4}>
-              <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-                <CardHeader
-                  title={getDayLabel(dates.dayAfterTomorrow)}
-                  subheader={formatDate(dates.dayAfterTomorrow)}
-                  sx={{ backgroundColor: '#e8f5e8' }}
-                />
-                <CardContent sx={{ flexGrow: 1, overflow: 'auto' }}>
-                  {tasks.dayAfterTomorrow.map((task) => (
-                    <TaskCard
-                      key={task._id}
-                      task={task}
-                      onEdit={() => handleOpenDialog(task)}
-                      onDelete={() => handleRequestDelete(task)}
-                      onToggleStatus={() => handleToggleStatus(task._id, task.status)}
-                      onArchive={() => handleArchive(task)}
-                    />
-                  ))}
-                  {tasks.dayAfterTomorrow.length === 0 && (
-                    <Typography variant="body2" color="text.secondary" align="center">
-                      No tasks for day after tomorrow
-                    </Typography>
-                  )}
-                </CardContent>
-              </Card>
+              {/* Day After Tomorrow */}
+              <Grid item xs={12} md={4}>
+                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <CardHeader
+                    title={getDayLabel(dates.dayAfterTomorrow)}
+                    subheader={formatDate(dates.dayAfterTomorrow)}
+                    sx={{ backgroundColor: '#e8f5e8' }}
+                  />
+                  <SortableContext
+                    items={tasks.dayAfterTomorrow.map(task => task._id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <DroppableCardContent
+                      date={dates.dayAfterTomorrow}
+                      sx={{
+                        flexGrow: 1,
+                        overflow: 'auto',
+                        minHeight: 200
+                      }}
+                    >
+                      {tasks.dayAfterTomorrow.map((task) => (
+                        <TaskCard
+                          key={task._id}
+                          id={task._id}
+                          task={task}
+                          date={dates.dayAfterTomorrow}
+                          onEdit={() => handleOpenDialog(task)}
+                          onDelete={() => handleRequestDelete(task)}
+                          onToggleStatus={() => handleToggleStatus(task._id, task.status)}
+                          onArchive={() => handleArchive(task)}
+                        />
+                      ))}
+                      {tasks.dayAfterTomorrow.length === 0 && (
+                        <Typography variant="body2" color="text.secondary" align="center">
+                          No tasks for day after tomorrow
+                        </Typography>
+                      )}
+                    </DroppableCardContent>
+                  </SortableContext>
+                </Card>
+              </Grid>
             </Grid>
-          </Grid>
+            <DragOverlay>
+              {activeTask ? (
+                <Card
+                  sx={{
+                    opacity: 0.8,
+                    transform: 'rotate(5deg)',
+                    maxWidth: 300,
+                    boxShadow: 6
+                  }}
+                >
+                  <CardContent>
+                    <Typography variant="h6" component="h3">
+                      {activeTask.title}
+                    </Typography>
+                    {activeTask.description && (
+                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                        {activeTask.description}
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
           )}
 
           {currentTab === 1 && (

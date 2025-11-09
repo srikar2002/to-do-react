@@ -16,23 +16,60 @@ import {
   Archive as ArchiveIcon,
   Unarchive as UnarchiveIcon
 } from '@mui/icons-material';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { TaskStatus, TaskPriority } from '../constants/enums';
 
-const TaskCard = ({ task, onEdit, onDelete, onToggleStatus, onArchive, onRestore, showArchive = true }) => {
+const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive, onRestore, showArchive = true }) => {
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isArchived = task.archived || false;
+  
+  // Make task draggable only if not completed or archived
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({
+    id: id || task._id,
+    disabled: isCompleted || isArchived,
+    data: {
+      type: 'task',
+      task,
+      date
+    }
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : (isCompleted ? 0.7 : 1),
+    cursor: isCompleted || isArchived ? 'default' : 'grab'
+  };
 
   return (
     <Card 
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
       sx={{ 
         mb: 2, 
-        opacity: isCompleted ? 0.7 : 1,
-        backgroundColor: isCompleted ? '#f5f5f5' : 'white'
+        backgroundColor: isCompleted ? '#f5f5f5' : 'white',
+        '&:hover': {
+          boxShadow: isCompleted || isArchived ? 1 : 4
+        }
       }}
     >
       <CardContent sx={{ pb: 1 }}>
         <Box display="flex" alignItems="flex-start" justifyContent="space-between">
-          <Box flexGrow={1} mr={1} sx={{ minWidth: 0 }}>
+          <Box 
+            flexGrow={1} 
+            mr={1} 
+            sx={{ minWidth: 0 }}
+            {...(!isCompleted && !isArchived ? listeners : {})}
+          >
             <Tooltip title={task.title} placement="top-start">
               <Typography 
                 variant="h6" 
