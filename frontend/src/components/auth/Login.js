@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import { useSnackbar } from 'notistack';
 import {
   Container,
   Paper,
@@ -8,7 +9,6 @@ import {
   Typography,
   Box,
   Link,
-  Alert,
   IconButton
 } from '@mui/material';
 import { Brightness4, Brightness7 } from '@mui/icons-material';
@@ -20,11 +20,11 @@ const Login = () => {
     email: '',
     password: ''
   });
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
   const { login } = useAuth();
   const { darkMode, toggleTheme } = useTheme();
+  const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -32,20 +32,19 @@ const Login = () => {
       ...formData,
       [e.target.name]: e.target.value
     });
-    setError('');
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
 
     const result = await login(formData.email, formData.password);
     
     if (result.success) {
+      enqueueSnackbar('Login successful!', { variant: 'success' });
       navigate('/dashboard');
     } else {
-      setError(result.message);
+      enqueueSnackbar(result.message, { variant: 'error' });
     }
     
     setLoading(false);
@@ -77,12 +76,6 @@ const Login = () => {
             <Typography component="h1" variant="h4" align="center" gutterBottom>
               Login
             </Typography>
-          
-          {error && (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          )}
 
           <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
             <TextField

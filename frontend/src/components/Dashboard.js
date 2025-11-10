@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useSnackbar } from 'notistack';
 import {
   Container,
   AppBar,
@@ -19,8 +20,6 @@ import {
   IconButton,
   Chip,
   CircularProgress,
-  Snackbar,
-  Alert,
   Select,
   MenuItem,
   FormControl,
@@ -65,7 +64,6 @@ import {
   TaskStatus,
   TaskPriority,
   DateOption,
-  SnackbarSeverity,
   ValidationLimits,
   DayLabels,
   DefaultValues,
@@ -78,6 +76,7 @@ const Dashboard = () => {
   const { user, logout } = useAuth();
   const { tasks, dates, archivedTasks, loading, createTask, updateTask, deleteTask, toggleTaskStatus, archiveTask, restoreTask, fetchArchivedTasks } = useTasks();
   const { darkMode, toggleTheme } = useTheme();
+  const { enqueueSnackbar } = useSnackbar();
   
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -92,11 +91,6 @@ const Dashboard = () => {
   const [tagInput, setTagInput] = useState('');
   const [errors, setErrors] = useState({
     title: ''
-  });
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: '',
-    severity: SnackbarSeverity.SUCCESS
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
@@ -119,12 +113,12 @@ const Dashboard = () => {
     if (task) {
       // Prevent editing archived tasks
       if (task.archived) {
-        showSnackbar(ErrorMessages.CANNOT_EDIT_ARCHIVED, SnackbarSeverity.WARNING);
+        enqueueSnackbar(ErrorMessages.CANNOT_EDIT_ARCHIVED, { variant: 'warning' });
         return;
       }
       // Prevent editing completed tasks
       if (task.status === TaskStatus.COMPLETED) {
-        showSnackbar(ErrorMessages.CANNOT_EDIT_COMPLETED, SnackbarSeverity.WARNING);
+        enqueueSnackbar(ErrorMessages.CANNOT_EDIT_COMPLETED, { variant: 'warning' });
         return;
       }
       
@@ -197,7 +191,7 @@ const Dashboard = () => {
 
     setErrors(nextErrors);
     if (nextErrors.title || descriptionTooLong) {
-      showSnackbar(ErrorMessages.VALIDATION_ERRORS, SnackbarSeverity.ERROR);
+      enqueueSnackbar(ErrorMessages.VALIDATION_ERRORS, { variant: 'error' });
       return;
     }
     
@@ -231,18 +225,18 @@ const Dashboard = () => {
       const result = await updateTask(editingTask._id, taskData);
       if (result.success) {
         handleCloseDialog();
-        showSnackbar(SuccessMessages.TASK_UPDATED, SnackbarSeverity.SUCCESS);
+        enqueueSnackbar(SuccessMessages.TASK_UPDATED, { variant: 'info' });
       } else {
-        showSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, SnackbarSeverity.ERROR);
+        enqueueSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, { variant: 'error' });
       }
     } else {
       // Create new task
       const result = await createTask(taskData);
       if (result.success) {
         handleCloseDialog();
-        showSnackbar(SuccessMessages.TASK_CREATED, SnackbarSeverity.SUCCESS);
+        enqueueSnackbar(SuccessMessages.TASK_CREATED, { variant: 'success' });
       } else {
-        showSnackbar(result.message || ErrorMessages.TASK_CREATE_FAILED, SnackbarSeverity.ERROR);
+        enqueueSnackbar(result.message || ErrorMessages.TASK_CREATE_FAILED, { variant: 'error' });
       }
     }
   };
@@ -261,9 +255,9 @@ const Dashboard = () => {
     if (!taskToDelete) return;
     const result = await deleteTask(taskToDelete._id);
     if (result?.success) {
-      showSnackbar(SuccessMessages.TASK_DELETED, SnackbarSeverity.SUCCESS);
+      enqueueSnackbar(SuccessMessages.TASK_DELETED, { variant: 'error' });
     } else {
-      showSnackbar(result?.message || ErrorMessages.TASK_DELETE_FAILED, SnackbarSeverity.ERROR);
+      enqueueSnackbar(result?.message || ErrorMessages.TASK_DELETE_FAILED, { variant: 'error' });
     }
     handleCloseDeleteDialog();
   };
@@ -275,24 +269,24 @@ const Dashboard = () => {
   const handleArchive = async (task) => {
     const result = await archiveTask(task._id);
     if (result.success) {
-      showSnackbar(SuccessMessages.TASK_ARCHIVED, SnackbarSeverity.SUCCESS);
+      enqueueSnackbar(SuccessMessages.TASK_ARCHIVED, { variant: 'success' });
       // Refresh archived tasks to update the count
       await fetchArchivedTasks();
     } else {
-      showSnackbar(result.message || ErrorMessages.TASK_ARCHIVE_FAILED, SnackbarSeverity.ERROR);
+      enqueueSnackbar(result.message || ErrorMessages.TASK_ARCHIVE_FAILED, { variant: 'error' });
     }
   };
 
   const handleRestore = async (task) => {
     const result = await restoreTask(task._id);
     if (result.success) {
-      showSnackbar(SuccessMessages.TASK_RESTORED, SnackbarSeverity.SUCCESS);
+      enqueueSnackbar(SuccessMessages.TASK_RESTORED, { variant: 'success' });
       // If we're on the archive tab, refresh archived tasks
       if (currentTab === 1) {
         await fetchArchivedTasks();
       }
     } else {
-      showSnackbar(result.message || ErrorMessages.TASK_RESTORE_FAILED, SnackbarSeverity.ERROR);
+      enqueueSnackbar(result.message || ErrorMessages.TASK_RESTORE_FAILED, { variant: 'error' });
     }
   };
 
@@ -389,9 +383,9 @@ const Dashboard = () => {
       if (validDates.includes(targetDate)) {
         const result = await updateTask(taskId, { date: targetDate });
         if (result.success) {
-          showSnackbar(SuccessMessages.TASK_UPDATED, SnackbarSeverity.SUCCESS);
+          enqueueSnackbar(SuccessMessages.TASK_UPDATED, { variant: 'info' });
         } else {
-          showSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, SnackbarSeverity.ERROR);
+          enqueueSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, { variant: 'error' });
         }
       }
     }
@@ -426,14 +420,6 @@ const Dashboard = () => {
     );
   };
 
-
-  const showSnackbar = (message, severity) => {
-    setSnackbar({ open: true, message, severity });
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
-  };
 
   const formatDate = (dateString) => {
     return dayjs(dateString).format('MMM DD, YYYY');
@@ -837,18 +823,6 @@ const Dashboard = () => {
             </DialogActions>
           </form>
         </Dialog>
-
-        {/* Snackbar for notifications */}
-        <Snackbar
-          open={snackbar.open}
-          autoHideDuration={6000}
-          onClose={handleCloseSnackbar}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        >
-          <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
-            {snackbar.message}
-          </Alert>
-        </Snackbar>
 
         {/* Delete Confirmation Dialog */}
         <Dialog 
