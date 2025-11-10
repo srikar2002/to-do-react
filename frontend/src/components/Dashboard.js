@@ -11,7 +11,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  Fab,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -269,7 +268,7 @@ const Dashboard = () => {
   const handleArchive = async (task) => {
     const result = await archiveTask(task._id);
     if (result.success) {
-      enqueueSnackbar(SuccessMessages.TASK_ARCHIVED, { variant: 'success' });
+      enqueueSnackbar(SuccessMessages.TASK_ARCHIVED, { variant: 'warning' });
       // Refresh archived tasks to update the count
       await fetchArchivedTasks();
     } else {
@@ -445,18 +444,98 @@ const Dashboard = () => {
 
   return (
     <Box sx={{ flexGrow: 1 }}>
-        <AppBar position="static">
+        <AppBar 
+          position="static"
+          sx={{
+            background: darkMode 
+              ? 'linear-gradient(135deg, #0f172a 0%, #1e40af 50%, #0369a1 100%)'
+              : 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #0891b2 100%)',
+            boxShadow: darkMode 
+              ? '0 4px 24px rgba(15, 23, 42, 0.6)'
+              : '0 4px 24px rgba(30, 58, 138, 0.5)',
+            backdropFilter: 'blur(10px)',
+            borderBottom: darkMode 
+              ? '1px solid rgba(255, 255, 255, 0.05)'
+              : '1px solid rgba(255, 255, 255, 0.1)'
+          }}
+        >
           <Toolbar>
-            <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
+            <Typography 
+              variant="h5" 
+              component="div" 
+              sx={{ 
+                flexGrow: 1,
+                fontWeight: 700,
+                letterSpacing: 1,
+                background: 'linear-gradient(45deg, #fff 30%, #f0f0f0 90%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text'
+              }}
+            >
               Taskly
             </Typography>
-            <Typography variant="body1" sx={{ mr: 2 }}>
-              Welcome, {user?.name}!
+            <Typography 
+              variant="body1" 
+              sx={{ 
+                mr: 2,
+                fontWeight: 500,
+                color: 'rgba(255, 255, 255, 0.95)'
+              }}
+            >
+              Welcome, <strong>{user?.name}</strong>!
             </Typography>
-            <IconButton color="inherit" onClick={toggleTheme} sx={{ mr: 1 }}>
+            {currentTab === 0 && (
+              <IconButton 
+                onClick={() => handleOpenDialog()} 
+                sx={{ 
+                  mr: 1,
+                  color: '#1976d2',
+                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                  userSelect: 'none',
+                  WebkitUserSelect: 'none',
+                  MozUserSelect: 'none',
+                  msUserSelect: 'none',
+                  '&:hover': {
+                    backgroundColor: '#fff',
+                    color: '#1565c0',
+                    transform: 'scale(1.1)'
+                  },
+                  transition: 'all 0.2s ease-in-out',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
+                }}
+              >
+                <AddIcon />
+              </IconButton>
+            )}
+            <IconButton 
+              color="inherit" 
+              onClick={toggleTheme} 
+              sx={{ 
+                mr: 1,
+                color: 'rgba(255, 255, 255, 0.9)',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  color: '#fff'
+                }
+              }}
+            >
               {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
             </IconButton>
-            <Button color="inherit" onClick={logout} startIcon={<LogoutIcon />}>
+            <Button 
+              color="inherit" 
+              onClick={logout} 
+              startIcon={<LogoutIcon />}
+              sx={{
+                fontWeight: 500,
+                color: 'rgba(255, 255, 255, 0.9)',
+                textTransform: 'none',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  color: '#fff'
+                }
+              }}
+            >
               Logout
             </Button>
           </Toolbar>
@@ -670,18 +749,6 @@ const Dashboard = () => {
             </Card>
           )}
         </Container>
-
-        {/* Floating Action Button - only show on Tasks tab */}
-        {currentTab === 0 && (
-          <Fab
-            color="primary"
-            aria-label="add"
-            sx={{ position: 'fixed', bottom: 16, right: 16 }}
-            onClick={() => handleOpenDialog()}
-          >
-            <AddIcon />
-          </Fab>
-        )}
 
         {/* Task Dialog */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
