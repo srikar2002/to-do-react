@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import {
   Container,
@@ -36,7 +37,8 @@ import {
   RadioButtonUnchecked as RadioButtonUncheckedIcon,
   Close as CloseIcon,
   Brightness4 as Brightness4Icon,
-  Brightness7 as Brightness7Icon
+  Brightness7 as Brightness7Icon,
+  Person as PersonIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import {
@@ -76,6 +78,7 @@ const Dashboard = () => {
   const { tasks, dates, archivedTasks, loading, createTask, updateTask, deleteTask, toggleTaskStatus, archiveTask, restoreTask, fetchArchivedTasks } = useTasks();
   const { darkMode, toggleTheme } = useTheme();
   const { enqueueSnackbar } = useSnackbar();
+  const navigate = useNavigate();
   
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -508,6 +511,21 @@ const Dashboard = () => {
                 <AddIcon />
               </IconButton>
             )}
+            <IconButton 
+              color="inherit" 
+              onClick={() => navigate('/profile')}
+              sx={{ 
+                mr: 1,
+                color: 'rgba(255, 255, 255, 0.9)',
+                '&:hover': {
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  color: '#fff'
+                }
+              }}
+              title="Profile"
+            >
+              <PersonIcon />
+            </IconButton>
             <IconButton 
               color="inherit" 
               onClick={toggleTheme} 
