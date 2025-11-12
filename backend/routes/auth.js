@@ -1,6 +1,6 @@
 const express = require('express');
 const User = require('../models/User');
-const { generateToken } = require('../middleware/auth');
+const { generateToken, verifyToken } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -42,7 +42,8 @@ router.post('/register', async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        timezone: user.timezone
       }
     });
   } catch (error) {
@@ -82,12 +83,59 @@ router.post('/login', async (req, res) => {
       user: {
         id: user._id,
         name: user.name,
-        email: user.email
+        email: user.email,
+        timezone: user.timezone
       }
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ message: 'Server error during login' });
+  }
+});
+
+// Update user timezone preference
+router.patch('/preferences/timezone', verifyToken, async (req, res) => {
+  try {
+    const { timezone } = req.body;
+    
+    // Validation
+    if (!timezone) {
+      return res.status(400).json({ message: 'Timezone is required' });
+    }
+    
+    // Validate timezone format (basic validation - should be a valid IANA timezone)
+    const validTimezones = [
+      'Asia/Kolkata',
+      'America/New_York',
+      'America/Los_Angeles',
+      'Europe/London'
+    ];
+    
+    if (!validTimezones.includes(timezone)) {
+      return res.status(400).json({ message: 'Invalid timezone' });
+    }
+    
+    // Find and update user
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    user.timezone = timezone;
+    await user.save();
+    
+    res.json({
+      message: 'Timezone preference updated successfully',
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        timezone: user.timezone
+      }
+    });
+  } catch (error) {
+    console.error('Update timezone error:', error);
+    res.status(500).json({ message: 'Server error while updating timezone' });
   }
 });
 
