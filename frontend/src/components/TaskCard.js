@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Card,
-  CardContent,
   Typography,
   IconButton,
   Box,
@@ -58,23 +56,23 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
 
   if (isCompleted) {
     return (
-      <Accordion
+      <Box
         ref={setNodeRef}
         style={style}
         {...attributes}
-        expanded={expanded}
-        onChange={() => setExpanded(!expanded)}
         sx={{
           mb: 1,
+          p: 1.5,
           backgroundColor: theme.palette.mode === 'dark' 
             ? 'rgba(255, 255, 255, 0.06)' 
-            : 'rgba(245, 245, 245, 0.8)',
+            : 'rgba(245, 245, 245, 0.9)',
           boxShadow: theme.palette.mode === 'dark' 
             ? '0 1px 4px rgba(0, 0, 0, 0.2)' 
-            : '0 1px 2px rgba(0, 0, 0, 0.08)',
+            : '0 1px 3px rgba(0, 0, 0, 0.08)',
           border: theme.palette.mode === 'dark' 
             ? '1px solid rgba(255, 255, 255, 0.08)' 
-            : '1px solid rgba(0, 0, 0, 0.06)',
+            : '1px solid rgba(0, 0, 0, 0.08)',
+          borderRadius: 2,
           transition: 'all 0.2s ease-in-out',
           '&:hover': {
             backgroundColor: theme.palette.mode === 'dark' 
@@ -82,32 +80,12 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
               : 'rgba(245, 245, 245, 1)',
             boxShadow: theme.palette.mode === 'dark' 
               ? '0 2px 8px rgba(0, 0, 0, 0.3)' 
-              : '0 2px 4px rgba(0, 0, 0, 0.12)'
-          },
-          '&:before': {
-            display: 'none'
-          },
-          '&.Mui-expanded': {
-            margin: '0 0 8px 0'
+              : '0 2px 6px rgba(0, 0, 0, 0.1)'
           }
         }}
       >
-        <AccordionSummary
-          expandIcon={<ExpandMoreIcon />}
-          sx={{
-            minHeight: 48,
-            '&.Mui-expanded': {
-              minHeight: 48
-            },
-            '& .MuiAccordionSummary-content': {
-              margin: '8px 0',
-              '&.Mui-expanded': {
-                margin: '8px 0'
-              }
-            }
-          }}
-        >
-          <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" pr={1}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" sx={{ minWidth: 0, overflow: 'hidden' }}>
+          <Box sx={{ minWidth: 0, flexGrow: 1, overflow: 'hidden', mr: 1 }}>
             <Tooltip title={task.title} placement="top-start">
               <Typography 
                 variant="body2"
@@ -118,26 +96,36 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
-                  fontSize: '0.8rem',
+                  fontSize: '0.875rem',
                   fontWeight: 400,
-                  flexGrow: 1
+                  lineHeight: 1.4,
+                  minWidth: 0
                 }}
               >
                 {task.title}
               </Typography>
             </Tooltip>
-            <Box display="flex" gap={0.25} ml={1}>
-              <IconButton 
-                size="small" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleStatus();
-                }}
-                color="success"
-                sx={{ padding: 0.25, minWidth: 28, width: 28, height: 28 }}
-              >
-                <CheckCircleIcon fontSize="small" />
-              </IconButton>
+          </Box>
+          <Box display="flex" alignItems="center" gap={0.5} sx={{ flexShrink: 0 }}>
+            <Tooltip title={isArchived ? "Cannot change status of archived tasks" : "Mark as incomplete"}>
+              <span>
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isArchived) {
+                      onToggleStatus();
+                    }
+                  }}
+                  color="success"
+                  disabled={isArchived}
+                  sx={{ padding: 0.5, minWidth: 32, width: 32, height: 32 }}
+                >
+                  <CheckCircleIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Tooltip title="Delete task">
               <IconButton 
                 size="small" 
                 onClick={(e) => {
@@ -145,145 +133,136 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   onDelete();
                 }}
                 color="error"
-                sx={{ padding: 0.25, minWidth: 28, width: 28, height: 28 }}
+                sx={{ 
+                  padding: 0.5,
+                  minWidth: 32,
+                  width: 32,
+                  height: 32,
+                  '&:hover': {
+                    backgroundColor: theme.palette.mode === 'dark' 
+                      ? 'rgba(211, 47, 47, 0.16)' 
+                      : 'rgba(211, 47, 47, 0.08)'
+                  }
+                }}
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>
-            </Box>
+            </Tooltip>
           </Box>
-        </AccordionSummary>
-        <AccordionDetails sx={{ pt: 0, pb: 1 }}>
-          {task.description && (
-            <Typography 
-              variant="body2" 
-              color="text.secondary" 
-              sx={{ 
-                textDecoration: 'line-through',
-                mb: 1
-              }}
-            >
-              {task.description}
-            </Typography>
-          )}
-          <Box display="flex" gap={0.5} flexWrap="wrap" alignItems="center">
-            <Chip 
-              label={task.status} 
-              size="small" 
-              color="success"
-              variant="filled"
-            />
-            {task.priority && (
-              <Chip 
-                label={task.priority} 
-                size="small" 
-                color={
-                  task.priority === TaskPriority.HIGH ? 'error' : 
-                  task.priority === TaskPriority.MEDIUM ? 'warning' : 
-                  'default'
-                }
-                variant="outlined"
-              />
-            )}
-            {task.rollover && (
-              <Chip 
-                label="Auto-rollover" 
-                size="small" 
-                color="info"
-                variant="outlined"
-              />
-            )}
-            {task.tags && task.tags.length > 0 && task.tags.map((tag, index) => (
-              <Chip
-                key={index}
-                label={tag}
-                size="small"
-                color="primary"
-                variant="outlined"
-              />
-            ))}
-          </Box>
-        </AccordionDetails>
-      </Accordion>
+        </Box>
+      </Box>
     );
   }
 
   return (
-    <Card 
+    <Accordion
       ref={setNodeRef}
       style={style}
       {...attributes}
-      sx={{ 
+      expanded={expanded}
+      onChange={() => setExpanded(!expanded)}
+      sx={{
         mb: 2,
         backgroundColor: theme.palette.mode === 'dark' 
           ? 'rgba(255, 255, 255, 0.08)' 
-          : 'rgba(255, 255, 255, 0.9)',
+          : 'rgba(255, 255, 255, 0.95)',
         boxShadow: theme.palette.mode === 'dark' 
           ? '0 2px 8px rgba(0, 0, 0, 0.3)' 
-          : '0 2px 4px rgba(0, 0, 0, 0.1)',
+          : '0 2px 6px rgba(0, 0, 0, 0.08)',
         border: theme.palette.mode === 'dark' 
           ? '1px solid rgba(255, 255, 255, 0.1)' 
-          : '1px solid rgba(0, 0, 0, 0.08)',
+          : '1px solid rgba(0, 0, 0, 0.1)',
+        borderRadius: 2,
         transition: 'all 0.2s ease-in-out',
         '&:hover': {
           backgroundColor: theme.palette.mode === 'dark' 
             ? 'rgba(255, 255, 255, 0.12)' 
             : 'rgba(255, 255, 255, 1)',
           boxShadow: isArchived 
-            ? (theme.palette.mode === 'dark' ? '0 2px 8px rgba(0, 0, 0, 0.3)' : '0 2px 4px rgba(0, 0, 0, 0.1)')
-            : (theme.palette.mode === 'dark' ? '0 4px 16px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.15)'),
+            ? (theme.palette.mode === 'dark' ? '0 2px 8px rgba(0, 0, 0, 0.3)' : '0 2px 6px rgba(0, 0, 0, 0.08)')
+            : (theme.palette.mode === 'dark' ? '0 4px 16px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.12)'),
           transform: isArchived ? 'none' : 'translateY(-2px)',
           border: theme.palette.mode === 'dark' 
             ? '1px solid rgba(255, 255, 255, 0.15)' 
-            : '1px solid rgba(0, 0, 0, 0.12)'
+            : '1px solid rgba(0, 0, 0, 0.15)'
+        },
+        '&:before': {
+          display: 'none'
+        },
+        '&.Mui-expanded': {
+          margin: '0 0 16px 0'
         }
       }}
     >
-      <CardContent sx={{ pb: 1 }}>
-        <Box display="flex" alignItems="flex-start" justifyContent="space-between">
+        <AccordionSummary
+          expandIcon={<ExpandMoreIcon />}
+          sx={{
+            minHeight: 56,
+            py: 1,
+            '&.Mui-expanded': {
+              minHeight: 56
+            },
+            '& .MuiAccordionSummary-content': {
+              margin: '12px 0',
+              alignItems: 'center',
+              minWidth: 0,
+              overflow: 'hidden',
+              '&.Mui-expanded': {
+                margin: '12px 0'
+              }
+            }
+          }}
+        >
+          <Box display="flex" alignItems="center" width="100%" pr={1} sx={{ minWidth: 0, overflow: 'hidden' }}>
+            <Box sx={{ minWidth: 0, flexGrow: 1, overflow: 'hidden' }}>
+              <Tooltip title={task.title} placement="top-start">
+                <Typography 
+                  variant="subtitle1"
+                  component="h3" 
+                  sx={{ 
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    fontWeight: 500,
+                    fontSize: '0.95rem',
+                    lineHeight: 1.4,
+                    minWidth: 0
+                  }}
+                >
+                  {task.title}
+                </Typography>
+              </Tooltip>
+            </Box>
+          </Box>
+        </AccordionSummary>
+      <AccordionDetails sx={{ pt: 2, pb: 2, px: 2 }}>
+        <Box display="flex" alignItems="flex-start" justifyContent="space-between" gap={2}>
           <Box 
             flexGrow={1} 
-            mr={1} 
             sx={{ minWidth: 0 }}
             {...(!isArchived ? listeners : {})}
           >
-            <Tooltip title={task.title} placement="top-start">
+            {task.description && (
               <Typography 
-                variant="h6"
-                component="h3" 
+                variant="body2" 
+                color="text.secondary" 
                 sx={{ 
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  fontWeight: 600
+                  mb: 1.5,
+                  wordBreak: 'break-word',
+                  lineHeight: 1.6,
+                  fontSize: '0.875rem'
                 }}
               >
-                {task.title}
+                {task.description}
               </Typography>
-            </Tooltip>
-            {task.description && (
-              <Tooltip title={task.description} placement="top-start">
-                <Typography 
-                  variant="body2" 
-                  color="text.secondary" 
-                  sx={{ 
-                    mt: 1,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                    wordBreak: 'break-word'
-                  }}
-                >
-                  {task.description}
-                </Typography>
-              </Tooltip>
             )}
-            <Box mt={1} display="flex" gap={1} flexWrap="wrap" alignItems="center">
+            <Box display="flex" gap={0.75} flexWrap="wrap" alignItems="center">
               <Chip 
                 label={task.status} 
                 size="small" 
                 color="default"
                 variant="outlined"
+                sx={{ fontSize: '0.75rem', height: 24 }}
               />
               {task.priority && (
                 <Chip 
@@ -295,6 +274,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                     'default'
                   }
                   variant="outlined"
+                  sx={{ fontSize: '0.75rem', height: 24 }}
                 />
               )}
               {task.rollover && (
@@ -303,6 +283,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   size="small" 
                   color="info"
                   variant="outlined"
+                  sx={{ fontSize: '0.75rem', height: 24 }}
                 />
               )}
               {task.tags && task.tags.length > 0 && task.tags.map((tag, index) => (
@@ -312,56 +293,134 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   size="small"
                   color="primary"
                   variant="outlined"
+                  sx={{ fontSize: '0.75rem', height: 24 }}
                 />
               ))}
             </Box>
           </Box>
-          <Box display="flex" flexDirection="column" gap={0.5}>
-            <IconButton 
-              size="small" 
-              onClick={onToggleStatus}
-              color="default"
-            >
-              <RadioButtonUncheckedIcon />
-            </IconButton>
+          <Box display="flex" flexDirection="column" gap={0.75} sx={{ flexShrink: 0 }}>
+            <Tooltip title={isArchived ? "Cannot change status of archived tasks" : "Mark as completed"}>
+              <span>
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isArchived) {
+                      onToggleStatus();
+                    }
+                  }}
+                  color="default"
+                  disabled={isArchived}
+                  sx={{ 
+                    width: 36, 
+                    height: 36,
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'dark' 
+                        ? 'rgba(255, 255, 255, 0.08)' 
+                        : 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                >
+                  <RadioButtonUncheckedIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
             <Tooltip title="Edit task">
               <span>
                 <IconButton 
                   size="small" 
-                  onClick={onEdit} 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onEdit();
+                  }} 
                   color="primary"
+                  sx={{ 
+                    width: 36, 
+                    height: 36,
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'dark' 
+                        ? 'rgba(25, 118, 210, 0.16)' 
+                        : 'rgba(25, 118, 210, 0.08)'
+                    }
+                  }}
                 >
-                  <EditIcon />
+                  <EditIcon fontSize="small" />
                 </IconButton>
               </span>
             </Tooltip>
             {showArchive && !isArchived && (
               <Tooltip title="Archive task">
-                <IconButton size="small" onClick={onArchive} color="default">
-                  <ArchiveIcon />
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onArchive();
+                  }} 
+                  color="default"
+                  sx={{ 
+                    width: 36, 
+                    height: 36,
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'dark' 
+                        ? 'rgba(255, 255, 255, 0.08)' 
+                        : 'rgba(0, 0, 0, 0.04)'
+                    }
+                  }}
+                >
+                  <ArchiveIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
             {isArchived && onRestore && (
               <Tooltip title="Restore task">
-                <IconButton size="small" onClick={onRestore} color="primary">
-                  <UnarchiveIcon />
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRestore();
+                  }} 
+                  color="primary"
+                  sx={{ 
+                    width: 36, 
+                    height: 36,
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'dark' 
+                        ? 'rgba(25, 118, 210, 0.16)' 
+                        : 'rgba(25, 118, 210, 0.08)'
+                    }
+                  }}
+                >
+                  <UnarchiveIcon fontSize="small" />
                 </IconButton>
               </Tooltip>
             )}
             {!isArchived && (
-              <IconButton 
-                size="small" 
-                onClick={onDelete} 
-                color="error"
-              >
-                <DeleteIcon />
-              </IconButton>
+              <Tooltip title="Delete task">
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                  }}
+                  color="error"
+                  sx={{ 
+                    width: 36, 
+                    height: 36,
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'dark' 
+                        ? 'rgba(211, 47, 47, 0.16)' 
+                        : 'rgba(211, 47, 47, 0.08)'
+                    }
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
             )}
           </Box>
         </Box>
-      </CardContent>
-    </Card>
+      </AccordionDetails>
+    </Accordion>
   );
 };
 
