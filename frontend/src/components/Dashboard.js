@@ -41,8 +41,8 @@ import {
   Person as PersonIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
-import Calendar from 'react-calendar';
-import 'react-calendar/dist/Calendar.css';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
 import {
   DndContext,
   closestCenter,
@@ -450,21 +450,34 @@ const Dashboard = () => {
     (acc[task.date] = acc[task.date] || []).push(task);
     return acc;
   }, {});
-  const currentWeekDates = (() => {
-    const today = dayjs();
-    const start = today.add(today.day() === 0 ? -6 : 1 - today.day(), 'day');
-    return Array.from({ length: 7 }, (_, i) => start.add(i, 'day').format('YYYY-MM-DD'));
-  })();
-  const tileContent = ({ date, view }) => {
-    if (view !== 'month') return null;
-    const dateStr = dayjs(date).format('YYYY-MM-DD');
-    if (!currentWeekDates.includes(dateStr)) return null;
+
+  // Convert tasks to FullCalendar events format
+  const calendarEvents = Object.entries(taskMap).map(([date, taskList]) => {
+    const pending = taskList.filter(t => t.status === TaskStatus.PENDING).length;
+    return {
+      title: pending > 0 ? `${pending} task${pending !== 1 ? 's' : ''}` : '',
+      date: date,
+      display: 'background',
+      backgroundColor: pending > 0 ? (darkMode ? 'rgba(25, 118, 210, 0.2)' : 'rgba(33, 150, 243, 0.15)') : 'transparent',
+      classNames: pending > 0 ? 'task-indicator' : '',
+    };
+  });
+
+  // Custom event content renderer for task dots
+  const renderEventContent = (eventInfo) => {
+    const dateStr = dayjs(eventInfo.event.start).format('YYYY-MM-DD');
     const tasks = taskMap[dateStr] || [];
-    if (!tasks.length) return null;
     const pending = tasks.filter(t => t.status === TaskStatus.PENDING).length;
-    return pending > 0 ? <Box sx={{ width: '8px', height: '8px', bgcolor: darkMode ? '#1976d2' : '#2196f3', borderRadius: '50%', mx: 'auto', mt: 1 }} /> : null;
+    
+    if (pending > 0) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', pt: 0.5 }}>
+          <Box sx={{ width: '8px', height: '8px', bgcolor: darkMode ? '#1976d2' : '#2196f3', borderRadius: '50%' }} />
+        </Box>
+      );
+    }
+    return null;
   };
-  const tileClassName = ({ date, view }) => view === 'month' && !currentWeekDates.includes(dayjs(date).format('YYYY-MM-DD')) ? 'react-calendar__tile--hidden' : null;
 
   // Only show full-page loader on initial load (when dates are not set yet)
   if (loading && !dates.today) {
@@ -741,22 +754,91 @@ const Dashboard = () => {
               {/* Weekly Calendar */}
               <Grid item xs={12}>
                 <Box sx={{ maxWidth: 800, mx: 'auto', p: 2,
-                  '& .react-calendar': { width: '100%', border: darkMode ? '1px solid #444' : '1px solid #e0e0e0', borderRadius: '8px', bgcolor: darkMode ? '#1e1e1e' : '#fff', fontFamily: 'inherit' },
-                  '& .react-calendar__navigation': { mb: 2, borderBottom: darkMode ? '1px solid #444' : '1px solid #e0e0e0' },
-                  '& .react-calendar__navigation button': { fontSize: '1rem', color: darkMode ? '#fff' : '#000', '&:hover': { bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5' } },
-                  '& .react-calendar__navigation__label': { fontSize: '1rem', fontWeight: 500, color: darkMode ? '#fff' : '#000' },
-                  '& .react-calendar__month-view__weekdays': { mb: 1, borderBottom: darkMode ? '1px solid #444' : '1px solid #e0e0e0' },
-                  '& .react-calendar__month-view__weekdays__weekday': { fontSize: '0.875rem', fontWeight: 500, color: darkMode ? '#aaa' : '#666', p: 1 },
-                  '& .react-calendar__month-view__weekdays__weekday abbr': { textDecoration: 'none' },
-                  '& .react-calendar__month-view__weekNumbers': { display: 'none' },
-                  '& .react-calendar__tile': { p: 2, fontSize: '1rem', color: darkMode ? '#fff' : '#000', border: darkMode ? '1px solid #333' : '1px solid #e0e0e0', bgcolor: darkMode ? '#1e1e1e' : '#fff' },
-                  '& .react-calendar__tile--hidden': { display: 'none !important' },
-                  '& .react-calendar__tile--active': { bgcolor: darkMode ? '#1976d2' : '#2196f3', color: '#fff', borderRadius: '8px', border: darkMode ? '1px solid #1976d2' : '1px solid #2196f3' },
-                  '& .react-calendar__tile--now': { bgcolor: darkMode ? 'rgba(25, 118, 210, 0.15)' : 'rgba(33, 150, 243, 0.1)', borderRadius: '8px', border: darkMode ? '1px solid #1976d2' : '1px solid #2196f3' },
-                  '& .react-calendar__month-view__week': { display: 'none' },
-                  '& .react-calendar__month-view__week:has(.react-calendar__tile--now)': { display: 'flex !important' }
+                  '& .fc': { 
+                    fontFamily: 'inherit',
+                    border: darkMode ? '1px solid #444' : '1px solid #e0e0e0',
+                    borderRadius: '8px',
+                    bgcolor: darkMode ? '#1e1e1e' : '#fff',
+                    color: darkMode ? '#fff' : '#000'
+                  },
+                  '& .fc-header-toolbar': {
+                    mb: 2,
+                    borderBottom: darkMode ? '1px solid #444' : '1px solid #e0e0e0',
+                    pb: 1
+                  },
+                  '& .fc-button': {
+                    bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5',
+                    color: darkMode ? '#fff' : '#000',
+                    border: darkMode ? '1px solid #444' : '1px solid #e0e0e0',
+                    '&:hover': {
+                      bgcolor: darkMode ? '#3d3d3d' : '#e0e0e0'
+                    }
+                  },
+                  '& .fc-toolbar-title': {
+                    fontSize: '1rem',
+                    fontWeight: 500,
+                    color: darkMode ? '#fff' : '#000'
+                  },
+                  '& .fc-col-header': {
+                    bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5',
+                    borderBottom: darkMode ? '1px solid #444' : '1px solid #e0e0e0'
+                  },
+                  '& .fc-col-header-cell': {
+                    fontSize: '0.875rem',
+                    fontWeight: 500,
+                    color: darkMode ? '#aaa' : '#666',
+                    p: 1
+                  },
+                  '& .fc-day': {
+                    border: darkMode ? '1px solid #333' : '1px solid #e0e0e0',
+                    bgcolor: darkMode ? '#1e1e1e' : '#fff'
+                  },
+                  '& .fc-daygrid-day': {
+                    p: 1,
+                    minHeight: '80px'
+                  },
+                  '& .fc-daygrid-day-number': {
+                    fontSize: '1rem',
+                    color: darkMode ? '#fff' : '#000',
+                    p: 1
+                  },
+                  '& .fc-day-today': {
+                    bgcolor: darkMode ? 'rgba(25, 118, 210, 0.15)' : 'rgba(33, 150, 243, 0.1)',
+                    border: darkMode ? '1px solid #1976d2' : '1px solid #2196f3'
+                  },
+                  '& .fc-day-selected': {
+                    bgcolor: darkMode ? '#1976d2' : '#2196f3',
+                    color: '#fff'
+                  },
+                  '& .fc-event': {
+                    border: 'none',
+                    bgcolor: 'transparent'
+                  },
+                  '& .fc-event-title': {
+                    display: 'none'
+                  },
+                  '& .task-indicator': {
+                    bgcolor: 'transparent !important'
+                  }
                 }}>
-                  <Calendar onChange={setCalendarDate} value={calendarDate} tileContent={tileContent} tileClassName={tileClassName} showNeighboringMonth={false} />
+                  <FullCalendar
+                    plugins={[dayGridPlugin]}
+                    initialView="dayGridWeek"
+                    headerToolbar={{
+                      left: 'prev',
+                      center: 'title',
+                      right: 'next'
+                    }}
+                    height="auto"
+                    events={calendarEvents}
+                    eventContent={renderEventContent}
+                    dayMaxEvents={false}
+                    weekends={true}
+                    firstDay={1}
+                    dateClick={(info) => {
+                      setCalendarDate(new Date(info.dateStr));
+                    }}
+                  />
                 </Box>
               </Grid>
             </Grid>
