@@ -378,12 +378,18 @@ const Dashboard = () => {
       return;
     }
 
-    // If dropped in a different column, update the date
+    // If dropped in a different column, update the date and order
     if (sourceDate !== targetDate) {
       // Validate that targetDate is one of our three dates
       const validDates = [dates.today, dates.tomorrow, dates.dayAfterTomorrow];
       if (validDates.includes(targetDate)) {
-        const result = await updateTask(taskId, { date: targetDate });
+        // Get the target column's task list to determine the new order
+        const dateKey = targetDate === dates.today ? 'today' : 
+                       targetDate === dates.tomorrow ? 'tomorrow' : 'dayAfterTomorrow';
+        const targetTaskList = tasks[dateKey];
+        // Set order to append at the end of the target column
+        const newOrder = targetTaskList.length;
+        const result = await updateTask(taskId, { date: targetDate, order: newOrder });
         if (result.success) {
           enqueueSnackbar(SuccessMessages.TASK_UPDATED, { variant: 'info' });
         } else {

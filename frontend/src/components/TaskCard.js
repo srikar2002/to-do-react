@@ -196,9 +196,14 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
     >
         <AccordionSummary
           expandIcon={<ExpandMoreIcon />}
+          {...(!isArchived && !isCompleted ? { ...attributes, ...listeners } : {})}
           sx={{
             minHeight: 56,
             py: 1,
+            cursor: isCompleted || isArchived ? 'default' : 'grab',
+            '&:active': {
+              cursor: isCompleted || isArchived ? 'default' : 'grabbing'
+            },
             '&.Mui-expanded': {
               minHeight: 56
             },
@@ -240,7 +245,6 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
           <Box 
             flexGrow={1} 
             sx={{ minWidth: 0 }}
-            {...(!isArchived ? listeners : {})}
           >
             {task.description && (
               <Typography 
