@@ -41,6 +41,8 @@ import {
   Person as PersonIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
+import Calendar from 'react-calendar';
+import 'react-calendar/dist/Calendar.css';
 import {
   DndContext,
   closestCenter,
@@ -98,6 +100,7 @@ const Dashboard = () => {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
   const [activeTask, setActiveTask] = useState(null);
+  const [calendarDate, setCalendarDate] = useState(new Date());
 
   // Configure sensors for drag and drop
   const sensors = useSensors(
@@ -442,6 +445,27 @@ const Dashboard = () => {
     return DayLabels.DAY_AFTER_TOMORROW;
   };
 
+  // Calendar helpers
+  const taskMap = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow].reduce((acc, task) => {
+    (acc[task.date] = acc[task.date] || []).push(task);
+    return acc;
+  }, {});
+  const currentWeekDates = (() => {
+    const today = dayjs();
+    const start = today.add(today.day() === 0 ? -6 : 1 - today.day(), 'day');
+    return Array.from({ length: 7 }, (_, i) => start.add(i, 'day').format('YYYY-MM-DD'));
+  })();
+  const tileContent = ({ date, view }) => {
+    if (view !== 'month') return null;
+    const dateStr = dayjs(date).format('YYYY-MM-DD');
+    if (!currentWeekDates.includes(dateStr)) return null;
+    const tasks = taskMap[dateStr] || [];
+    if (!tasks.length) return null;
+    const pending = tasks.filter(t => t.status === TaskStatus.PENDING).length;
+    return pending > 0 ? <Box sx={{ width: '8px', height: '8px', bgcolor: darkMode ? '#1976d2' : '#2196f3', borderRadius: '50%', mx: 'auto', mt: 1 }} /> : null;
+  };
+  const tileClassName = ({ date, view }) => view === 'month' && !currentWeekDates.includes(dayjs(date).format('YYYY-MM-DD')) ? 'react-calendar__tile--hidden' : null;
+
   // Only show full-page loader on initial load (when dates are not set yet)
   if (loading && !dates.today) {
     return (
@@ -712,6 +736,28 @@ const Dashboard = () => {
                     </DroppableCardContent>
                   </SortableContext>
                 </Card>
+              </Grid>
+
+              {/* Weekly Calendar */}
+              <Grid item xs={12}>
+                <Box sx={{ maxWidth: 800, mx: 'auto', p: 2,
+                  '& .react-calendar': { width: '100%', border: darkMode ? '1px solid #444' : '1px solid #e0e0e0', borderRadius: '8px', bgcolor: darkMode ? '#1e1e1e' : '#fff', fontFamily: 'inherit' },
+                  '& .react-calendar__navigation': { mb: 2, borderBottom: darkMode ? '1px solid #444' : '1px solid #e0e0e0' },
+                  '& .react-calendar__navigation button': { fontSize: '1rem', color: darkMode ? '#fff' : '#000', '&:hover': { bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5' } },
+                  '& .react-calendar__navigation__label': { fontSize: '1rem', fontWeight: 500, color: darkMode ? '#fff' : '#000' },
+                  '& .react-calendar__month-view__weekdays': { mb: 1, borderBottom: darkMode ? '1px solid #444' : '1px solid #e0e0e0' },
+                  '& .react-calendar__month-view__weekdays__weekday': { fontSize: '0.875rem', fontWeight: 500, color: darkMode ? '#aaa' : '#666', p: 1 },
+                  '& .react-calendar__month-view__weekdays__weekday abbr': { textDecoration: 'none' },
+                  '& .react-calendar__month-view__weekNumbers': { display: 'none' },
+                  '& .react-calendar__tile': { p: 2, fontSize: '1rem', color: darkMode ? '#fff' : '#000', border: darkMode ? '1px solid #333' : '1px solid #e0e0e0', bgcolor: darkMode ? '#1e1e1e' : '#fff' },
+                  '& .react-calendar__tile--hidden': { display: 'none !important' },
+                  '& .react-calendar__tile--active': { bgcolor: darkMode ? '#1976d2' : '#2196f3', color: '#fff', borderRadius: '8px', border: darkMode ? '1px solid #1976d2' : '1px solid #2196f3' },
+                  '& .react-calendar__tile--now': { bgcolor: darkMode ? 'rgba(25, 118, 210, 0.15)' : 'rgba(33, 150, 243, 0.1)', borderRadius: '8px', border: darkMode ? '1px solid #1976d2' : '1px solid #2196f3' },
+                  '& .react-calendar__month-view__week': { display: 'none' },
+                  '& .react-calendar__month-view__week:has(.react-calendar__tile--now)': { display: 'flex !important' }
+                }}>
+                  <Calendar onChange={setCalendarDate} value={calendarDate} tileContent={tileContent} tileClassName={tileClassName} showNeighboringMonth={false} />
+                </Box>
               </Grid>
             </Grid>
             <DragOverlay>
