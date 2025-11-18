@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Container, Typography, Box, Button, FormControl, InputLabel, Select, MenuItem, Card, CardContent, Alert, CircularProgress } from '@mui/material';
-import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
+import { Container, Typography, Box, Button, FormControl, InputLabel, Select, MenuItem, Card, CardContent, Alert, CircularProgress, Avatar } from '@mui/material';
+import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon } from '@mui/icons-material';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
@@ -60,8 +60,41 @@ const Profile = () => {
   return (
     <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
       <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/dashboard')} sx={{ mb: 3 }}>Back to Dashboard</Button>
+      
+      {/* User Information Card */}
+      <Card sx={{ boxShadow: darkMode ? '0 4px 24px rgba(0, 0, 0, 0.6)' : '0 4px 24px rgba(0, 0, 0, 0.1)', mb: 3 }}>
+        <CardContent sx={{ p: 4 }}>
+          <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+            User Information
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+            <Avatar sx={{ width: 64, height: 64, bgcolor: 'primary.main' }}>
+              {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+            </Avatar>
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <PersonIcon color="action" fontSize="small" />
+                <Typography variant="h6" component="div">
+                  {user?.name || 'N/A'}
+                </Typography>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <EmailIcon color="action" fontSize="small" />
+                <Typography variant="body1" color="text.secondary">
+                  {user?.email || 'N/A'}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        </CardContent>
+      </Card>
+
+      {/* Timezone Settings Card */}
       <Card sx={{ boxShadow: darkMode ? '0 4px 24px rgba(0, 0, 0, 0.6)' : '0 4px 24px rgba(0, 0, 0, 0.1)' }}>
         <CardContent sx={{ p: 4 }}>
+          <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 3, fontWeight: 400 }}>
+            Preferences
+          </Typography>
           {error && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
               {error}

@@ -38,11 +38,12 @@ import {
   Close as CloseIcon,
   Brightness4 as Brightness4Icon,
   Brightness7 as Brightness7Icon,
-  Person as PersonIcon
+  Person as PersonIcon,
+  ChevronLeft as ChevronLeftIcon,
+  ChevronRight as ChevronRightIcon,
+  Today as TodayIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
 import {
   DndContext,
   closestCenter,
@@ -100,7 +101,13 @@ const Dashboard = () => {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
   const [activeTask, setActiveTask] = useState(null);
-  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [weekStartDate, setWeekStartDate] = useState(() => {
+    // Start week from Monday
+    const today = dayjs();
+    const dayOfWeek = today.day();
+    const monday = dayOfWeek === 0 ? today.subtract(6, 'day') : today.subtract(dayOfWeek - 1, 'day');
+    return monday;
+  });
 
   // Configure sensors for drag and drop
   const sensors = useSensors(
@@ -445,38 +452,17 @@ const Dashboard = () => {
     return DayLabels.DAY_AFTER_TOMORROW;
   };
 
-  // Calendar helpers
-  const taskMap = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow].reduce((acc, task) => {
-    (acc[task.date] = acc[task.date] || []).push(task);
-    return acc;
-  }, {});
-
-  // Convert tasks to FullCalendar events format
-  const calendarEvents = Object.entries(taskMap).map(([date, taskList]) => {
-    const pending = taskList.filter(t => t.status === TaskStatus.PENDING).length;
-    return {
-      title: pending > 0 ? `${pending} task${pending !== 1 ? 's' : ''}` : '',
-      date: date,
-      display: 'background',
-      backgroundColor: pending > 0 ? (darkMode ? 'rgba(25, 118, 210, 0.2)' : 'rgba(33, 150, 243, 0.15)') : 'transparent',
-      classNames: pending > 0 ? 'task-indicator' : '',
-    };
-  });
-
-  // Custom event content renderer for task dots
-  const renderEventContent = (eventInfo) => {
-    const dateStr = dayjs(eventInfo.event.start).format('YYYY-MM-DD');
-    const tasks = taskMap[dateStr] || [];
-    const pending = tasks.filter(t => t.status === TaskStatus.PENDING).length;
-    
-    if (pending > 0) {
-      return (
-        <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', pt: 0.5 }}>
-          <Box sx={{ width: '8px', height: '8px', bgcolor: darkMode ? '#1976d2' : '#2196f3', borderRadius: '50%' }} />
-        </Box>
-      );
-    }
-    return null;
+  // Weekly view helpers
+  const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
+  const weekDates = Array.from({ length: 7 }, (_, i) => weekStartDate.clone().add(i, 'day').format('YYYY-MM-DD'));
+  const today = dayjs().format('YYYY-MM-DD');
+  const getTasksForDate = (dateStr) => allTasks.filter(t => t.date === dateStr && !t.archived);
+  
+  const handlePreviousWeek = () => setWeekStartDate(prev => prev.clone().subtract(7, 'day'));
+  const handleNextWeek = () => setWeekStartDate(prev => prev.clone().add(7, 'day'));
+  const handleTodayWeek = () => {
+    const d = dayjs();
+    setWeekStartDate(d.day() === 0 ? d.subtract(6, 'day') : d.subtract(d.day() - 1, 'day'));
   };
 
   // Only show full-page loader on initial load (when dates are not set yet)
@@ -751,95 +737,65 @@ const Dashboard = () => {
                 </Card>
               </Grid>
 
-              {/* Weekly Calendar */}
+              {/* Weekly Task View */}
               <Grid item xs={12}>
-                <Box sx={{ maxWidth: 800, mx: 'auto', p: 2,
-                  '& .fc': { 
-                    fontFamily: 'inherit',
-                    border: darkMode ? '1px solid #444' : '1px solid #e0e0e0',
-                    borderRadius: '8px',
-                    bgcolor: darkMode ? '#1e1e1e' : '#fff',
-                    color: darkMode ? '#fff' : '#000'
-                  },
-                  '& .fc-header-toolbar': {
-                    mb: 2,
-                    borderBottom: darkMode ? '1px solid #444' : '1px solid #e0e0e0',
-                    pb: 1
-                  },
-                  '& .fc-button': {
-                    bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5',
-                    color: darkMode ? '#fff' : '#000',
-                    border: darkMode ? '1px solid #444' : '1px solid #e0e0e0',
-                    '&:hover': {
-                      bgcolor: darkMode ? '#3d3d3d' : '#e0e0e0'
-                    }
-                  },
-                  '& .fc-toolbar-title': {
-                    fontSize: '1rem',
-                    fontWeight: 500,
-                    color: darkMode ? '#fff' : '#000'
-                  },
-                  '& .fc-col-header': {
-                    bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5',
-                    borderBottom: darkMode ? '1px solid #444' : '1px solid #e0e0e0'
-                  },
-                  '& .fc-col-header-cell': {
-                    fontSize: '0.875rem',
-                    fontWeight: 500,
-                    color: darkMode ? '#aaa' : '#666',
-                    p: 1
-                  },
-                  '& .fc-day': {
-                    border: darkMode ? '1px solid #333' : '1px solid #e0e0e0',
-                    bgcolor: darkMode ? '#1e1e1e' : '#fff'
-                  },
-                  '& .fc-daygrid-day': {
-                    p: 1,
-                    minHeight: '80px'
-                  },
-                  '& .fc-daygrid-day-number': {
-                    fontSize: '1rem',
-                    color: darkMode ? '#fff' : '#000',
-                    p: 1
-                  },
-                  '& .fc-day-today': {
-                    bgcolor: darkMode ? 'rgba(25, 118, 210, 0.15)' : 'rgba(33, 150, 243, 0.1)',
-                    border: darkMode ? '1px solid #1976d2' : '1px solid #2196f3'
-                  },
-                  '& .fc-day-selected': {
-                    bgcolor: darkMode ? '#1976d2' : '#2196f3',
-                    color: '#fff'
-                  },
-                  '& .fc-event': {
-                    border: 'none',
-                    bgcolor: 'transparent'
-                  },
-                  '& .fc-event-title': {
-                    display: 'none'
-                  },
-                  '& .task-indicator': {
-                    bgcolor: 'transparent !important'
-                  }
-                }}>
-                  <FullCalendar
-                    plugins={[dayGridPlugin]}
-                    initialView="dayGridWeek"
-                    headerToolbar={{
-                      left: 'prev',
-                      center: 'title',
-                      right: 'next'
-                    }}
-                    height="auto"
-                    events={calendarEvents}
-                    eventContent={renderEventContent}
-                    dayMaxEvents={false}
-                    weekends={true}
-                    firstDay={1}
-                    dateClick={(info) => {
-                      setCalendarDate(new Date(info.dateStr));
-                    }}
-                  />
-                </Box>
+                <Card sx={{ bgcolor: darkMode ? '#1e1e1e' : '#fff', border: darkMode ? '1px solid #444' : '1px solid #e0e0e0', borderRadius: '8px', p: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+                    <IconButton onClick={handlePreviousWeek} size="small" sx={{ color: darkMode ? '#fff' : '#000', '&:hover': { bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5' } }}>
+                      <ChevronLeftIcon />
+                    </IconButton>
+                    <Typography variant="h6" sx={{ fontWeight: 500, color: darkMode ? '#fff' : '#000' }}>
+                      {weekStartDate.format('MMM DD')} - {weekStartDate.clone().add(6, 'day').format('MMM DD, YYYY')}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button onClick={handleTodayWeek} size="small" variant="outlined" sx={{ textTransform: 'none', minWidth: 'auto', px: 1.5, borderColor: darkMode ? '#444' : '#e0e0e0', color: darkMode ? '#fff' : '#000', '&:hover': { borderColor: darkMode ? '#555' : '#ccc', bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5' } }}>
+                        Today
+                      </Button>
+                      <IconButton onClick={handleNextWeek} size="small" sx={{ color: darkMode ? '#fff' : '#000', '&:hover': { bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5' } }}>
+                        <ChevronRightIcon />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                  <Grid container spacing={1}>
+                    {weekDates.map(dateStr => {
+                      const dateTasks = getTasksForDate(dateStr);
+                      const pending = dateTasks.filter(t => t.status === TaskStatus.PENDING);
+                      const completed = dateTasks.filter(t => t.status === TaskStatus.COMPLETED);
+                      const isToday = dateStr === today;
+                      const d = dayjs(dateStr);
+                      const taskSummary = pending.length && completed.length 
+                        ? `${pending.length} pending • ${completed.length} done`
+                        : pending.length ? `${pending.length} pending`
+                        : completed.length ? `${completed.length} done`
+                        : 'No tasks';
+                      return (
+                        <Grid item xs={12} sm={6} md={true} key={dateStr} sx={{ flex: { md: '1 1 0%' } }}>
+                          <Box sx={{
+                            p: 1.5, borderRadius: '8px', textAlign: 'center',
+                            bgcolor: isToday ? (darkMode ? 'rgba(25, 118, 210, 0.15)' : 'rgba(33, 150, 243, 0.1)') : (darkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)'),
+                            border: isToday ? (darkMode ? '1px solid #1976d2' : '1px solid #2196f3') : (darkMode ? '1px solid #333' : '1px solid #e0e0e0')
+                          }}>
+                            <Typography variant="caption" sx={{ color: darkMode ? '#aaa' : '#666', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 500, display: 'block', mb: 0.5 }}>
+                              {d.format('ddd')}
+                            </Typography>
+                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 1 }}>
+                              <Typography variant="h6" sx={{ color: isToday ? (darkMode ? '#1976d2' : '#2196f3') : (darkMode ? '#fff' : '#000'), fontWeight: isToday ? 700 : 500 }}>
+                                {d.format('D')}
+                              </Typography>
+                              <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                {pending.length > 0 && <Box sx={{ width: '8px', height: '8px', borderRadius: '50%', bgcolor: darkMode ? '#1976d2' : '#2196f3' }} />}
+                                {completed.length > 0 && <Box sx={{ width: '8px', height: '8px', borderRadius: '50%', bgcolor: darkMode ? '#4caf50' : '#66bb6a' }} />}
+                              </Box>
+                            </Box>
+                            <Typography variant="caption" sx={{ color: darkMode ? '#888' : '#999', fontSize: '0.7rem' }}>
+                              {taskSummary}
+                            </Typography>
+                          </Box>
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                </Card>
               </Grid>
             </Grid>
             <DragOverlay>
