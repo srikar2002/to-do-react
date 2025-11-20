@@ -98,6 +98,117 @@ router.post('/', async (req, res) => {
   }
 });
 
+// Create recurring task
+router.post('/recurring', async (req, res) => {
+  try {
+    const { title, description, startDate, status, priority, tags, recurrencePattern, recurrenceInterval, recurrenceEndDate } = req.body;
+    
+    // Validation
+    if (!title || !startDate) {
+      return res.status(400).json({ message: 'Title and start date are required' });
+    }
+    
+    if (!recurrencePattern || !['daily', 'weekly', 'custom'].includes(recurrencePattern)) {
+      return res.status(400).json({ message: 'Valid recurrence pattern (daily, weekly, custom) is required' });
+    }
+    
+    // Validate date format
+    if (!dayjs(startDate, 'YYYY-MM-DD', true).isValid()) {
+      return res.status(400).json({ message: 'Invalid start date format. Use YYYY-MM-DD' });
+    }
+    
+    if (recurrenceEndDate && !dayjs(recurrenceEndDate, 'YYYY-MM-DD', true).isValid()) {
+      return res.status(400).json({ message: 'Invalid end date format. Use YYYY-MM-DD' });
+    }
+    
+    // Validate priority
+    if (priority && !['Low', 'Medium', 'High'].includes(priority)) {
+      return res.status(400).json({ message: 'Invalid priority. Must be Low, Medium, or High' });
+    }
+    
+    // Validate custom interval
+    if (recurrencePattern === 'custom' && (!recurrenceInterval || recurrenceInterval < 1)) {
+      return res.status(400).json({ message: 'Custom recurrence requires interval >= 1' });
+    }
+    
+    const start = dayjs(startDate);
+    const end = recurrenceEndDate ? dayjs(recurrenceEndDate) : dayjs().add(90, 'days'); // Default to 90 days if no end date
+    const createdTasks = [];
+    
+    // Create parent task template (not displayed, used for reference)
+    // Archive it so it doesn't show up in the main task list
+    const parentTask = new Task({
+      userId: req.userId,
+      title,
+      description: description || '',
+      date: startDate,
+      status: status || 'Pending',
+      priority: priority || 'Medium',
+      tags: Array.isArray(tags) ? tags.filter(tag => tag && tag.trim()) : [],
+      isRecurring: true,
+      recurrencePattern,
+      recurrenceInterval: recurrencePattern === 'custom' ? recurrenceInterval : 1,
+      recurrenceEndDate: recurrenceEndDate || null,
+      archived: true // Archive parent task so it doesn't appear in main view
+    });
+    await parentTask.save();
+    
+    // Generate task instances
+    let currentDate = start;
+    let taskCount = 0;
+    const maxTasks = 365; // Limit to prevent excessive task creation
+    
+    while (currentDate.isBefore(end) || currentDate.isSame(end, 'day')) {
+      if (taskCount >= maxTasks) break;
+      
+      const taskDate = currentDate.format('YYYY-MM-DD');
+      
+      // Get the highest order for this date
+      const maxOrderTask = await Task.findOne({
+        userId: req.userId,
+        date: taskDate
+      }).sort({ order: -1 });
+      const nextOrder = maxOrderTask ? maxOrderTask.order + 1 : 0;
+      
+      const task = new Task({
+        userId: req.userId,
+        title,
+        description: description || '',
+        date: taskDate,
+        status: status || 'Pending',
+        priority: priority || 'Medium',
+        tags: Array.isArray(tags) ? tags.filter(tag => tag && tag.trim()) : [],
+        isRecurring: false, // Individual instances are not marked as recurring
+        parentTaskId: parentTask._id,
+        order: nextOrder
+      });
+      
+      await task.save();
+      createdTasks.push(task);
+      taskCount++;
+      
+      // Calculate next occurrence date
+      if (recurrencePattern === 'daily') {
+        currentDate = currentDate.add(1, 'day');
+      } else if (recurrencePattern === 'weekly') {
+        currentDate = currentDate.add(1, 'week');
+      } else if (recurrencePattern === 'custom') {
+        currentDate = currentDate.add(recurrenceInterval, 'day');
+      }
+    }
+    
+    res.status(201).json({
+      message: `Recurring task created successfully. Generated ${createdTasks.length} task instances.`,
+      parentTask,
+      tasks: createdTasks,
+      count: createdTasks.length
+    });
+  } catch (error) {
+    console.error('Create recurring task error:', error);
+    res.status(500).json({ message: 'Server error while creating recurring task' });
+  }
+});
+
 // Update task
 router.put('/:id', async (req, res) => {
   try {

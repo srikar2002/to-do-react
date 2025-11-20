@@ -75,6 +75,27 @@ export const TaskProvider = ({ children }) => {
     }
   };
 
+  const createRecurringTask = async (taskData) => {
+    if (!user) {
+      return { success: false, message: 'User not authenticated' };
+    }
+    
+    try {
+      const response = await axios.post('/api/tasks/recurring', taskData);
+      await fetchTasks(); // Refresh tasks
+      return { 
+        success: true, 
+        tasks: response.data.tasks,
+        count: response.data.count || 0
+      };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Failed to create recurring task' 
+      };
+    }
+  };
+
 
   const updateTask = async (taskId, taskData) => {
     if (!user) {
@@ -192,6 +213,7 @@ export const TaskProvider = ({ children }) => {
     fetchTasks,
     fetchArchivedTasks,
     createTask,
+    createRecurringTask,
     updateTask,
     deleteTask,
     toggleTaskStatus,

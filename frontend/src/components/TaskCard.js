@@ -17,7 +17,8 @@ import {
   RadioButtonUnchecked as RadioButtonUncheckedIcon,
   Archive as ArchiveIcon,
   Unarchive as UnarchiveIcon,
-  ExpandMore as ExpandMoreIcon
+  ExpandMore as ExpandMoreIcon,
+  Repeat as RepeatIcon
 } from '@mui/icons-material';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -286,6 +287,16 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   label="Auto-rollover" 
                   size="small" 
                   color="info"
+                  variant="outlined"
+                  sx={{ fontSize: '0.75rem', height: 24 }}
+                />
+              )}
+              {task.parentTaskId && (
+                <Chip 
+                  icon={<RepeatIcon sx={{ fontSize: '0.875rem !important' }} />}
+                  label="Recurring" 
+                  size="small" 
+                  color="secondary"
                   variant="outlined"
                   sx={{ fontSize: '0.75rem', height: 24 }}
                 />

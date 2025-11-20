@@ -26,7 +26,10 @@ import {
   InputLabel,
   InputAdornment,
   Tabs,
-  Tab
+  Tab,
+  FormControlLabel,
+  Switch,
+  Divider
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -78,7 +81,7 @@ import {
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
-  const { tasks, dates, archivedTasks, loading, createTask, updateTask, deleteTask, toggleTaskStatus, archiveTask, restoreTask, fetchArchivedTasks } = useTasks();
+  const { tasks, dates, archivedTasks, loading, createTask, createRecurringTask, updateTask, deleteTask, toggleTaskStatus, archiveTask, restoreTask, fetchArchivedTasks } = useTasks();
   const { darkMode, toggleTheme } = useTheme();
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
@@ -91,11 +94,16 @@ const Dashboard = () => {
     date: DefaultValues.DATE,
     status: DefaultValues.STATUS,
     priority: DefaultValues.PRIORITY,
-    tags: []
+    tags: [],
+    isRecurring: false,
+    recurrencePattern: 'daily',
+    recurrenceInterval: 1,
+    recurrenceEndDate: ''
   });
   const [tagInput, setTagInput] = useState('');
   const [errors, setErrors] = useState({
-    title: ''
+    title: '',
+    recurrenceInterval: ''
   });
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
@@ -121,7 +129,7 @@ const Dashboard = () => {
     })
   );
 
-  const handleOpenDialog = (task = null) => {
+  const handleOpenDialog = (task = null, isRecurring = false) => {
     if (task) {
       // Prevent editing archived tasks
       if (task.archived) {
@@ -154,7 +162,11 @@ const Dashboard = () => {
         date: dateOption,
         status: task.status,
         priority: task.priority || DefaultValues.PRIORITY,
-        tags: task.tags || []
+        tags: task.tags || [],
+        isRecurring: false, // Can't edit recurring tasks as recurring
+        recurrencePattern: 'daily',
+        recurrenceInterval: 1,
+        recurrenceEndDate: ''
       });
     } else {
       setEditingTask(null);
@@ -164,10 +176,15 @@ const Dashboard = () => {
         date: DefaultValues.DATE,
         status: DefaultValues.STATUS,
         priority: DefaultValues.PRIORITY,
-        tags: []
+        tags: [],
+        isRecurring: isRecurring,
+        recurrencePattern: 'daily',
+        recurrenceInterval: 1,
+        recurrenceEndDate: ''
       });
       setTagInput('');
     }
+    setErrors({ title: '', recurrenceInterval: '' });
     setOpenDialog(true);
   };
 
@@ -180,20 +197,26 @@ const Dashboard = () => {
       date: DefaultValues.DATE,
       status: DefaultValues.STATUS,
       priority: DefaultValues.PRIORITY,
-      tags: []
+      tags: [],
+      isRecurring: false,
+      recurrencePattern: 'daily',
+      recurrenceInterval: 1,
+      recurrenceEndDate: ''
     });
     setTagInput('');
-    setErrors({ title: '' });
+    setErrors({ title: '', recurrenceInterval: '' });
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
 
     // Custom validations
-    const nextErrors = { title: '' };
+    const nextErrors = { title: '', recurrenceInterval: '' };
     const isTitleEmpty = formData.title.trim().length === 0;
     const titleTooLong = formData.title.trim().length > ValidationLimits.TITLE_MAX_LENGTH;
     const descriptionTooLong = formData.description.trim().length > ValidationLimits.DESCRIPTION_MAX_LENGTH;
+    const invalidInterval = formData.isRecurring && formData.recurrencePattern === 'custom' && 
+      (!formData.recurrenceInterval || formData.recurrenceInterval < 1);
 
     if (isTitleEmpty) {
       nextErrors.title = ValidationMessages.TITLE_REQUIRED;
@@ -201,8 +224,12 @@ const Dashboard = () => {
       nextErrors.title = ValidationMessages.TITLE_MAX_LENGTH;
     }
 
+    if (invalidInterval) {
+      nextErrors.recurrenceInterval = 'Interval must be at least 1 day';
+    }
+
     setErrors(nextErrors);
-    if (nextErrors.title || descriptionTooLong) {
+    if (nextErrors.title || nextErrors.recurrenceInterval || descriptionTooLong) {
       enqueueSnackbar(ErrorMessages.VALIDATION_ERRORS, { variant: 'error' });
       return;
     }
@@ -222,18 +249,18 @@ const Dashboard = () => {
       default:
         actualDate = dayjs().format('YYYY-MM-DD');
     }
-    
-    const taskData = {
-      title: formData.title,
-      description: formData.description,
-      date: actualDate,
-      status: formData.status,
-      priority: formData.priority,
-      tags: formData.tags
-    };
 
     if (editingTask) {
-      // Update existing task
+      // Update existing task (can't be recurring when editing)
+      const taskData = {
+        title: formData.title,
+        description: formData.description,
+        date: actualDate,
+        status: formData.status,
+        priority: formData.priority,
+        tags: formData.tags
+      };
+      
       const result = await updateTask(editingTask._id, taskData);
       if (result.success) {
         handleCloseDialog();
@@ -241,8 +268,38 @@ const Dashboard = () => {
       } else {
         enqueueSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, { variant: 'error' });
       }
+    } else if (formData.isRecurring) {
+      // Create recurring task
+      const recurringTaskData = {
+        title: formData.title,
+        description: formData.description,
+        startDate: actualDate,
+        status: formData.status,
+        priority: formData.priority,
+        tags: formData.tags,
+        recurrencePattern: formData.recurrencePattern,
+        recurrenceInterval: formData.recurrenceInterval,
+        recurrenceEndDate: formData.recurrenceEndDate || null
+      };
+
+      const result = await createRecurringTask(recurringTaskData);
+      if (result.success) {
+        handleCloseDialog();
+        enqueueSnackbar(`Recurring task created successfully. Generated ${result.count || 0} task instances.`, { variant: 'success' });
+      } else {
+        enqueueSnackbar(result.message || 'Failed to create recurring task', { variant: 'error' });
+      }
     } else {
-      // Create new task
+      // Create regular task
+      const taskData = {
+        title: formData.title,
+        description: formData.description,
+        date: actualDate,
+        status: formData.status,
+        priority: formData.priority,
+        tags: formData.tags
+      };
+
       const result = await createTask(taskData);
       if (result.success) {
         handleCloseDialog();
@@ -861,10 +918,23 @@ const Dashboard = () => {
         {/* Task Dialog */}
         <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
           <DialogTitle>
-            {editingTask ? 'Edit Task' : 'Add New Task'}
+            {editingTask ? 'Edit Task' : formData.isRecurring ? 'Create Recurring Task' : 'Add New Task'}
           </DialogTitle>
           <form onSubmit={handleSubmit} noValidate>
             <DialogContent>
+              {!editingTask && (
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.isRecurring}
+                      onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
+                      color="primary"
+                    />
+                  }
+                  label="Make this a recurring task"
+                  sx={{ mb: 2 }}
+                />
+              )}
               <TextField
                 autoFocus
                 margin="dense"
@@ -902,11 +972,11 @@ const Dashboard = () => {
                 sx={{ mb: 2 }}
               />
               <FormControl fullWidth sx={{ mb: 2 }}>
-                <InputLabel id="date-select-label">Date</InputLabel>
+                <InputLabel id="date-select-label">{formData.isRecurring ? 'Start Date' : 'Date'}</InputLabel>
                 <Select
                   labelId="date-select-label"
                   value={formData.date}
-                  label="Date"
+                  label={formData.isRecurring ? 'Start Date' : 'Date'}
                   onChange={(e) => setFormData({ ...formData, date: e.target.value })}
                 >
                   <MenuItem value={DateOption.TODAY}>{DayLabels.TODAY}</MenuItem>
@@ -914,6 +984,58 @@ const Dashboard = () => {
                   <MenuItem value={DateOption.DAY_AFTER_TOMORROW}>{DayLabels.DAY_AFTER_TOMORROW}</MenuItem>
                 </Select>
               </FormControl>
+              {formData.isRecurring && !editingTask && (
+                <>
+                  <FormControl fullWidth sx={{ mb: 2 }}>
+                    <InputLabel id="recurrence-pattern-select-label">Recurrence Pattern</InputLabel>
+                    <Select
+                      labelId="recurrence-pattern-select-label"
+                      value={formData.recurrencePattern}
+                      label="Recurrence Pattern"
+                      onChange={(e) => setFormData({ ...formData, recurrencePattern: e.target.value })}
+                    >
+                      <MenuItem value="daily">Daily</MenuItem>
+                      <MenuItem value="weekly">Weekly</MenuItem>
+                      <MenuItem value="custom">Custom Interval</MenuItem>
+                    </Select>
+                  </FormControl>
+                  {formData.recurrencePattern === 'custom' && (
+                    <TextField
+                      margin="dense"
+                      label="Interval (days)"
+                      type="number"
+                      fullWidth
+                      variant="outlined"
+                      value={formData.recurrenceInterval}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value) || 1;
+                        setFormData({ ...formData, recurrenceInterval: Math.max(1, value) });
+                        if (errors.recurrenceInterval && value >= 1) {
+                          setErrors({ ...errors, recurrenceInterval: '' });
+                        }
+                      }}
+                      error={Boolean(errors.recurrenceInterval)}
+                      helperText={errors.recurrenceInterval || 'Number of days between occurrences'}
+                      sx={{ mb: 2 }}
+                      inputProps={{ min: 1 }}
+                    />
+                  )}
+                  <TextField
+                    margin="dense"
+                    label="End Date (Optional)"
+                    type="date"
+                    fullWidth
+                    variant="outlined"
+                    value={formData.recurrenceEndDate}
+                    onChange={(e) => setFormData({ ...formData, recurrenceEndDate: e.target.value })}
+                    InputLabelProps={{
+                      shrink: true,
+                    }}
+                    helperText="Leave empty to generate tasks for 90 days"
+                    sx={{ mb: 2 }}
+                  />
+                </>
+              )}
               <FormControl fullWidth sx={{ mb: 2 }}>
                 <InputLabel id="priority-select-label">Priority</InputLabel>
                 <Select
@@ -990,10 +1112,11 @@ const Dashboard = () => {
                 disabled={
                   formData.title.trim().length === 0 ||
                   formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH ||
-                  formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH
+                  formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH ||
+                  (formData.isRecurring && formData.recurrencePattern === 'custom' && (!formData.recurrenceInterval || formData.recurrenceInterval < 1))
                 }
               >
-                {editingTask ? 'Update' : 'Create'}
+                {editingTask ? 'Update' : formData.isRecurring ? 'Create Recurring Task' : 'Create'}
               </Button>
             </DialogActions>
           </form>

@@ -48,6 +48,29 @@ const taskSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // Recurring task fields
+  isRecurring: {
+    type: Boolean,
+    default: false
+  },
+  recurrencePattern: {
+    type: String,
+    enum: ['daily', 'weekly', 'custom'],
+    required: false
+  },
+  recurrenceInterval: {
+    type: Number,
+    default: 1 // For custom: number of days between occurrences
+  },
+  recurrenceEndDate: {
+    type: String, // YYYY-MM-DD format
+    default: null
+  },
+  parentTaskId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Task',
+    default: null // Reference to the original recurring task template
+  },
   createdAt: {
     type: Date,
     default: Date.now
