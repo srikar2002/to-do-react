@@ -67,6 +67,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useTasks } from '../contexts/TaskContext';
 import { useTheme } from '../contexts/ThemeContext';
 import TaskCard from './TaskCard';
+import AnalyticsDashboard from './AnalyticsDashboard';
 import {
   TaskStatus,
   TaskPriority,
@@ -650,6 +651,7 @@ const Dashboard = () => {
             <Tabs value={currentTab} onChange={handleTabChange} aria-label="task tabs">
               <Tab label="Tasks" />
               <Tab label={`Archived (${archivedTasks.length})`} />
+              <Tab label="Analytics" />
             </Tabs>
           </Box>
 
@@ -912,6 +914,10 @@ const Dashboard = () => {
                 )}
               </CardContent>
             </Card>
+          )}
+
+          {currentTab === 2 && (
+            <AnalyticsDashboard />
           )}
         </Container>
 
