@@ -71,6 +71,15 @@ const taskSchema = new mongoose.Schema({
     ref: 'Task',
     default: null // Reference to the original recurring task template
   },
+  // Google Calendar integration
+  syncToGoogleCalendar: {
+    type: Boolean,
+    default: false
+  },
+  googleCalendarEventId: {
+    type: String,
+    default: null // Store the Google Calendar event ID for updates/deletions
+  },
   createdAt: {
     type: Date,
     default: Date.now

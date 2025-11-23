@@ -5,7 +5,9 @@ const dotenv = require('dotenv');
 const { startRolloverScheduler } = require('./scheduler/rolloverScheduler');
 
 // Load environment variables
-dotenv.config();
+// Try to load from root directory first, then backend directory
+dotenv.config({ path: '.env' });
+dotenv.config({ path: './backend/.env' });
 
 const app = express();
 
@@ -34,6 +36,12 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  
+  // Check Google Calendar credentials on startup
+  if (process.env.GOOGLE_CALENDAR_CREDENTIALS) {
+    const { checkCredentials } = require('./services/googleCalendar');
+    checkCredentials();
+  }
   
   // Start the rollover scheduler
   startRolloverScheduler();

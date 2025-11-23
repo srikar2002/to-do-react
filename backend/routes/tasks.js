@@ -1,7 +1,9 @@
 const express = require('express');
 const Task = require('../models/Task');
+const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth');
 const dayjs = require('dayjs');
+const { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } = require('../services/googleCalendar');
 
 const router = express.Router();
 
@@ -51,7 +53,7 @@ router.get('/', async (req, res) => {
 // Create new task
 router.post('/', async (req, res) => {
   try {
-    const { title, description, date, status, priority, tags } = req.body;
+    const { title, description, date, status, priority, tags, syncToGoogleCalendar } = req.body;
     
     // Validation
     if (!title || !date) {
@@ -82,11 +84,27 @@ router.post('/', async (req, res) => {
       date,
       status: status || 'Pending',
       priority: priority || 'Medium',
-      tags: Array.isArray(tags) ? tags.filter(tag => tag && tag.trim()) : []
+      tags: Array.isArray(tags) ? tags.filter(tag => tag && tag.trim()) : [],
+      syncToGoogleCalendar: syncToGoogleCalendar || false
     });
     
     task.order = nextOrder;
     await task.save();
+    
+    // Sync to Google Calendar if enabled
+    if (syncToGoogleCalendar) {
+      try {
+        const user = await User.findById(req.userId);
+        const eventId = await createCalendarEvent(task, user?.email || null);
+        if (eventId) {
+          task.googleCalendarEventId = eventId;
+          await task.save();
+        }
+      } catch (calendarError) {
+        console.error('Error syncing to Google Calendar:', calendarError);
+        // Don't fail task creation if calendar sync fails
+      }
+    }
     
     res.status(201).json({
       message: 'Task created successfully',
@@ -101,7 +119,7 @@ router.post('/', async (req, res) => {
 // Create recurring task
 router.post('/recurring', async (req, res) => {
   try {
-    const { title, description, startDate, status, priority, tags, recurrencePattern, recurrenceInterval, recurrenceEndDate } = req.body;
+    const { title, description, startDate, status, priority, tags, recurrencePattern, recurrenceInterval, recurrenceEndDate, syncToGoogleCalendar } = req.body;
     
     // Validation
     if (!title || !startDate) {
@@ -149,7 +167,8 @@ router.post('/recurring', async (req, res) => {
       recurrencePattern,
       recurrenceInterval: recurrencePattern === 'custom' ? recurrenceInterval : 1,
       recurrenceEndDate: recurrenceEndDate || null,
-      archived: true // Archive parent task so it doesn't appear in main view
+      archived: true, // Archive parent task so it doesn't appear in main view
+      syncToGoogleCalendar: syncToGoogleCalendar || false
     });
     await parentTask.save();
     
@@ -180,10 +199,27 @@ router.post('/recurring', async (req, res) => {
         tags: Array.isArray(tags) ? tags.filter(tag => tag && tag.trim()) : [],
         isRecurring: false, // Individual instances are not marked as recurring
         parentTaskId: parentTask._id,
-        order: nextOrder
+        order: nextOrder,
+        syncToGoogleCalendar: syncToGoogleCalendar || false
       });
       
       await task.save();
+      
+      // Sync to Google Calendar if enabled
+      if (syncToGoogleCalendar) {
+        try {
+          const user = await User.findById(req.userId);
+          const eventId = await createCalendarEvent(task, user?.email || null);
+          if (eventId) {
+            task.googleCalendarEventId = eventId;
+            await task.save();
+          }
+        } catch (calendarError) {
+          console.error('Error syncing recurring task to Google Calendar:', calendarError);
+          // Don't fail task creation if calendar sync fails
+        }
+      }
+      
       createdTasks.push(task);
       taskCount++;
       
@@ -212,7 +248,7 @@ router.post('/recurring', async (req, res) => {
 // Update task
 router.put('/:id', async (req, res) => {
   try {
-    const { title, description, date, status, priority, tags, order } = req.body;
+    const { title, description, date, status, priority, tags, order, syncToGoogleCalendar } = req.body;
     const taskId = req.params.id;
     
     // Find task and verify ownership
@@ -236,6 +272,9 @@ router.put('/:id', async (req, res) => {
       return res.status(400).json({ message: 'Cannot edit a completed task. Uncomplete it first to make changes.' });
     }
     
+    const wasSyncingToCalendar = task.syncToGoogleCalendar;
+    const hadEventId = task.googleCalendarEventId;
+    
     // Update fields for non-completed tasks
     if (title !== undefined) task.title = title;
     if (description !== undefined) task.description = description;
@@ -258,8 +297,39 @@ router.put('/:id', async (req, res) => {
     if (order !== undefined && typeof order === 'number') {
       task.order = order;
     }
+    if (syncToGoogleCalendar !== undefined) {
+      task.syncToGoogleCalendar = syncToGoogleCalendar;
+    }
     
     await task.save();
+    
+    // Handle Google Calendar sync
+    try {
+      const user = await User.findById(req.userId);
+      const userEmail = user?.email || null;
+      
+      if (task.syncToGoogleCalendar) {
+        if (hadEventId) {
+          // Update existing event
+          await updateCalendarEvent(task.googleCalendarEventId, task, userEmail);
+        } else {
+          // Create new event
+          const eventId = await createCalendarEvent(task, userEmail);
+          if (eventId) {
+            task.googleCalendarEventId = eventId;
+            await task.save();
+          }
+        }
+      } else if (wasSyncingToCalendar && hadEventId) {
+        // User disabled sync, delete the event
+        await deleteCalendarEvent(task.googleCalendarEventId, userEmail);
+        task.googleCalendarEventId = null;
+        await task.save();
+      }
+    } catch (calendarError) {
+      console.error('Error syncing to Google Calendar:', calendarError);
+      // Don't fail task update if calendar sync fails
+    }
     
     res.json({
       message: 'Task updated successfully',
@@ -302,10 +372,24 @@ router.delete('/:id', async (req, res) => {
   try {
     const taskId = req.params.id;
     
-    const task = await Task.findOneAndDelete({ _id: taskId, userId: req.userId });
+    const task = await Task.findOne({ _id: taskId, userId: req.userId });
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
+    
+    // Delete from Google Calendar if synced
+    if (task.syncToGoogleCalendar && task.googleCalendarEventId) {
+      try {
+        const user = await User.findById(req.userId);
+        await deleteCalendarEvent(task.googleCalendarEventId, user?.email || null);
+      } catch (calendarError) {
+        console.error('Error deleting from Google Calendar:', calendarError);
+        // Continue with task deletion even if calendar deletion fails
+      }
+    }
+    
+    // Delete the task
+    await Task.findByIdAndDelete(taskId);
     
     res.json({ message: 'Task deleted successfully' });
   } catch (error) {
