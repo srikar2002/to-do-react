@@ -5,3 +5,10 @@ PORT=5000
 MONGODB_URI=mongodb://localhost:27017/todoapp
 JWT_SECRET=your_jwt_secret_key_here_change_this_in_production
 JWT_EXPIRE=7d
+
+// Email Configuration (for task creation notifications)
+// For Gmail, use an App Password: https://support.google.com/accounts/answer/185833
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASS=your_app_password_here

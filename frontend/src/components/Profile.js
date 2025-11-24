@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Container, Typography, Box, Button, FormControl, InputLabel, Select, MenuItem, Card, CardContent, Alert, CircularProgress, Avatar } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon } from '@mui/icons-material';
+import { Container, Typography, Box, Button, FormControl, InputLabel, Select, MenuItem, Card, CardContent, Alert, CircularProgress, Avatar, Switch, FormControlLabel } from '@mui/material';
+import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon, Notifications as NotificationsIcon } from '@mui/icons-material';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
@@ -18,15 +18,20 @@ const Profile = () => {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
   const [timezone, setTimezone] = useState(user?.timezone || 'Asia/Kolkata');
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(user?.emailNotificationsEnabled || false);
   const [loading, setLoading] = useState(false);
+  const [notificationLoading, setNotificationLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Update timezone when user data changes
+  // Update timezone and notifications when user data changes
   useEffect(() => {
     if (user?.timezone) {
       setTimezone(user.timezone);
       localStorage.setItem('userTimezone', user.timezone);
+    }
+    if (user?.emailNotificationsEnabled !== undefined) {
+      setEmailNotificationsEnabled(user.emailNotificationsEnabled);
     }
   }, [user]);
 
@@ -54,6 +59,34 @@ const Profile = () => {
       setTimezone(user?.timezone || 'Asia/Kolkata');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleNotificationToggle = async (e) => {
+    const enabled = e.target.checked;
+    setEmailNotificationsEnabled(enabled);
+    setError('');
+    setSuccess('');
+    setNotificationLoading(true);
+
+    try {
+      const response = await axios.patch('/api/auth/preferences/notifications', { 
+        emailNotificationsEnabled: enabled 
+      });
+      
+      // Update user in context and localStorage (preserve token)
+      const updatedUser = { ...response.data.user, token: user?.token };
+      setUser(updatedUser);
+      localStorage.setItem('user', JSON.stringify(response.data.user));
+      
+      setSuccess(`Email notifications ${enabled ? 'enabled' : 'disabled'} successfully!`);
+    } catch (error) {
+      console.error('Error updating notification preference:', error);
+      setError(error.response?.data?.message || 'Failed to update notification preference');
+      // Revert to previous state on error
+      setEmailNotificationsEnabled(user?.emailNotificationsEnabled || false);
+    } finally {
+      setNotificationLoading(false);
     }
   };
 
@@ -105,7 +138,7 @@ const Profile = () => {
               {success}
             </Alert>
           )}
-          <FormControl fullWidth disabled={loading}>
+          <FormControl fullWidth disabled={loading} sx={{ mb: 3 }}>
             <InputLabel id="timezone-select-label">Select Timezone</InputLabel>
             <Select 
               labelId="timezone-select-label" 
@@ -124,6 +157,29 @@ const Profile = () => {
               ))}
             </Select>
           </FormControl>
+
+          {/* Email Notifications Toggle */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <NotificationsIcon color="action" />
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={emailNotificationsEnabled}
+                  onChange={handleNotificationToggle}
+                  disabled={notificationLoading}
+                />
+              }
+              label={
+                <Box>
+                  <Typography variant="body1">Email Notifications</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    Receive email notifications when tasks are created
+                  </Typography>
+                </Box>
+              }
+            />
+            {notificationLoading && <CircularProgress size={20} />}
+          </Box>
         </CardContent>
       </Card>
     </Container>

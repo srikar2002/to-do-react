@@ -1,7 +1,9 @@
 const express = require('express');
 const Task = require('../models/Task');
+const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth');
 const dayjs = require('dayjs');
+const { sendTaskCreationEmail } = require('../utils/emailService');
 
 const router = express.Router();
 
@@ -87,6 +89,26 @@ router.post('/', async (req, res) => {
     
     task.order = nextOrder;
     await task.save();
+    
+    // Send email notification if enabled (don't block response if email fails)
+    try {
+      const user = await User.findById(req.userId);
+      if (user && user.emailNotificationsEnabled) {
+        // Send email asynchronously - don't wait for it
+        sendTaskCreationEmail(
+          user.email,
+          user.name,
+          task.title,
+          task.date,
+          task.description
+        ).catch(err => {
+          console.error('Failed to send task creation email:', err);
+        });
+      }
+    } catch (emailError) {
+      // Log error but don't fail the task creation
+      console.error('Error checking notification preferences:', emailError);
+    }
     
     res.status(201).json({
       message: 'Task created successfully',
