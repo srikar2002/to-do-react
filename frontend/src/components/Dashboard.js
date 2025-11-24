@@ -99,8 +99,7 @@ const Dashboard = () => {
     isRecurring: false,
     recurrencePattern: 'daily',
     recurrenceInterval: 1,
-    recurrenceEndDate: '',
-    syncToGoogleCalendar: false
+    recurrenceEndDate: ''
   });
   const [tagInput, setTagInput] = useState('');
   const [errors, setErrors] = useState({
@@ -168,8 +167,7 @@ const Dashboard = () => {
         isRecurring: false, // Can't edit recurring tasks as recurring
         recurrencePattern: 'daily',
         recurrenceInterval: 1,
-        recurrenceEndDate: '',
-        syncToGoogleCalendar: task.syncToGoogleCalendar || false
+        recurrenceEndDate: ''
       });
     } else {
       setEditingTask(null);
@@ -183,8 +181,7 @@ const Dashboard = () => {
         isRecurring: isRecurring,
         recurrencePattern: 'daily',
         recurrenceInterval: 1,
-        recurrenceEndDate: '',
-        syncToGoogleCalendar: false
+        recurrenceEndDate: ''
       });
       setTagInput('');
     }
@@ -205,8 +202,7 @@ const Dashboard = () => {
       isRecurring: false,
       recurrencePattern: 'daily',
       recurrenceInterval: 1,
-      recurrenceEndDate: '',
-      syncToGoogleCalendar: false
+      recurrenceEndDate: ''
     });
     setTagInput('');
     setErrors({ title: '', recurrenceInterval: '' });
@@ -263,8 +259,7 @@ const Dashboard = () => {
         date: actualDate,
         status: formData.status,
         priority: formData.priority,
-        tags: formData.tags,
-        syncToGoogleCalendar: formData.syncToGoogleCalendar
+        tags: formData.tags
       };
       
       const result = await updateTask(editingTask._id, taskData);
@@ -285,8 +280,7 @@ const Dashboard = () => {
         tags: formData.tags,
         recurrencePattern: formData.recurrencePattern,
         recurrenceInterval: formData.recurrenceInterval,
-        recurrenceEndDate: formData.recurrenceEndDate || null,
-        syncToGoogleCalendar: formData.syncToGoogleCalendar
+        recurrenceEndDate: formData.recurrenceEndDate || null
       };
 
       const result = await createRecurringTask(recurringTaskData);
@@ -305,7 +299,6 @@ const Dashboard = () => {
         status: formData.status,
         priority: formData.priority,
         tags: formData.tags,
-        syncToGoogleCalendar: formData.syncToGoogleCalendar
       };
 
       const result = await createTask(taskData);
@@ -1116,17 +1109,6 @@ const Dashboard = () => {
                   ))}
                 </Box>
               )}
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={formData.syncToGoogleCalendar}
-                    onChange={(e) => setFormData({ ...formData, syncToGoogleCalendar: e.target.checked })}
-                    color="primary"
-                  />
-                }
-                label="Sync to Google Calendar"
-                sx={{ mb: 1 }}
-              />
             </DialogContent>
             <DialogActions>
               <Button onClick={handleCloseDialog}>Cancel</Button>

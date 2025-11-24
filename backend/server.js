@@ -37,12 +37,6 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   
-  // Check Google Calendar credentials on startup
-  if (process.env.GOOGLE_CALENDAR_CREDENTIALS) {
-    const { checkCredentials } = require('./services/googleCalendarAxios');
-    checkCredentials();
-  }
-  
   // Start the rollover scheduler
   startRolloverScheduler();
 });
