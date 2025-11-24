@@ -3,7 +3,8 @@ const Task = require('../models/Task');
 const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth');
 const dayjs = require('dayjs');
-const { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } = require('../services/googleCalendar');
+// Using axios version (no googleapis package needed)
+const { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent } = require('../services/googleCalendarAxios');
 
 const router = express.Router();
 

@@ -39,7 +39,7 @@ app.listen(PORT, () => {
   
   // Check Google Calendar credentials on startup
   if (process.env.GOOGLE_CALENDAR_CREDENTIALS) {
-    const { checkCredentials } = require('./services/googleCalendar');
+    const { checkCredentials } = require('./services/googleCalendarAxios');
     checkCredentials();
   }
   
