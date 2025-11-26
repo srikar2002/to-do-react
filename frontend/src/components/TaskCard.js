@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Typography,
   IconButton,
@@ -8,7 +8,18 @@ import {
   useTheme,
   Accordion,
   AccordionSummary,
-  AccordionDetails
+  AccordionDetails,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  Checkbox,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemButton,
+  CircularProgress
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -18,17 +29,40 @@ import {
   Archive as ArchiveIcon,
   Unarchive as UnarchiveIcon,
   ExpandMore as ExpandMoreIcon,
-  Repeat as RepeatIcon
+  Repeat as RepeatIcon,
+  Share as ShareIcon,
+  People as PeopleIcon
 } from '@mui/icons-material';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TaskStatus, TaskPriority } from '../constants/enums';
+import { useTasks } from '../contexts/TaskContext';
+import { useAuth } from '../contexts/AuthContext';
+import { useSnackbar } from 'notistack';
 
 const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive, onRestore, showArchive = true }) => {
   const theme = useTheme();
   const isCompleted = task.status === TaskStatus.COMPLETED;
   const isArchived = task.archived || false;
   const [expanded, setExpanded] = useState(false);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
+  const [users, setUsers] = useState([]);
+  const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const { getUsers, shareTask } = useTasks();
+  const { user: currentUser } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
+  
+  // Helper to normalize ID to string
+  const normalizeId = (id) => (id?._id || id)?.toString();
+  
+  // Check if current user is the owner
+  const currentUserId = normalizeId(currentUser?.id || currentUser?._id);
+  const taskUserId = normalizeId(task.userId);
+  const isOwner = taskUserId === currentUserId;
+  // Check if task is shared
+  const isShared = task.sharedWith?.length > 0;
   
   // Make task draggable only if not completed or archived
   const {
@@ -53,6 +87,59 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
     transition,
     opacity: isDragging ? 0.5 : (isCompleted ? 0.7 : 1),
     cursor: isCompleted || isArchived ? 'default' : 'grab'
+  };
+
+  useEffect(() => {
+    if (shareDialogOpen && isOwner) {
+      loadUsers();
+    }
+  }, [shareDialogOpen, isOwner]);
+
+  const loadUsers = async () => {
+    setLoadingUsers(true);
+    const result = await getUsers();
+    if (result.success) {
+      setUsers(result.users);
+      // Pre-select already shared users
+      setSelectedUserIds(task.sharedWith?.map(normalizeId) || []);
+    } else {
+      enqueueSnackbar(result.message || 'Failed to load users', { variant: 'error' });
+    }
+    setLoadingUsers(false);
+  };
+
+  const handleOpenShareDialog = () => {
+    setShareDialogOpen(true);
+  };
+
+  const handleCloseShareDialog = () => {
+    setShareDialogOpen(false);
+    setSelectedUserIds([]);
+  };
+
+  const handleToggleUser = (userId) => {
+    setSelectedUserIds(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleShare = async () => {
+    if (selectedUserIds.length === 0) {
+      enqueueSnackbar('Please select at least one user to share with', { variant: 'warning' });
+      return;
+    }
+    
+    setSharing(true);
+    const result = await shareTask(task._id, selectedUserIds);
+    if (result.success) {
+      enqueueSnackbar('Task shared successfully', { variant: 'success' });
+      handleCloseShareDialog();
+    } else {
+      enqueueSnackbar(result.message || 'Failed to share task', { variant: 'error' });
+    }
+    setSharing(false);
   };
 
   if (isCompleted) {
@@ -126,28 +213,33 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                 </IconButton>
               </span>
             </Tooltip>
-            <Tooltip title="Delete task">
-              <IconButton 
-                size="small" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete();
-                }}
-                color="error"
-                sx={{ 
-                  padding: 0.5,
-                  minWidth: 32,
-                  width: 32,
-                  height: 32,
-                  '&:hover': {
-                    backgroundColor: theme.palette.mode === 'dark' 
-                      ? 'rgba(211, 47, 47, 0.16)' 
-                      : 'rgba(211, 47, 47, 0.08)'
-                  }
-                }}
-              >
-                <DeleteIcon fontSize="small" />
-              </IconButton>
+            <Tooltip title={isOwner ? "Delete task" : "Only task owner can delete"}>
+              <span>
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isOwner) {
+                      onDelete();
+                    }
+                  }}
+                  color="error"
+                  disabled={!isOwner}
+                  sx={{ 
+                    padding: 0.5,
+                    minWidth: 32,
+                    width: 32,
+                    height: 32,
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'dark' 
+                        ? 'rgba(211, 47, 47, 0.16)' 
+                        : 'rgba(211, 47, 47, 0.08)'
+                    }
+                  }}
+                >
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
         </Box>
@@ -301,6 +393,25 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   sx={{ fontSize: '0.75rem', height: 24 }}
                 />
               )}
+              {isShared && (
+                <Chip 
+                  icon={<PeopleIcon sx={{ fontSize: '0.875rem !important' }} />}
+                  label={`Shared (${task.sharedWith?.length || 0})`}
+                  size="small" 
+                  color="info"
+                  variant="outlined"
+                  sx={{ fontSize: '0.75rem', height: 24 }}
+                />
+              )}
+              {!isOwner && task.userId && (
+                <Chip 
+                  label={`By ${task.userId.name || 'Unknown'}`}
+                  size="small" 
+                  color="default"
+                  variant="outlined"
+                  sx={{ fontSize: '0.75rem', height: 24 }}
+                />
+              )}
               {task.tags && task.tags.length > 0 && task.tags.map((tag, index) => (
                 <Chip
                   key={index}
@@ -409,6 +520,29 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                 </IconButton>
               </Tooltip>
             )}
+            {isOwner && !isArchived && (
+              <Tooltip title="Share task">
+                <IconButton 
+                  size="small" 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenShareDialog();
+                  }} 
+                  color="primary"
+                  sx={{ 
+                    width: 36, 
+                    height: 36,
+                    '&:hover': {
+                      backgroundColor: theme.palette.mode === 'dark' 
+                        ? 'rgba(25, 118, 210, 0.16)' 
+                        : 'rgba(25, 118, 210, 0.08)'
+                    }
+                  }}
+                >
+                  <ShareIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             {!isArchived && (
               <Tooltip title="Delete task">
                 <IconButton 
@@ -418,6 +552,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                     onDelete();
                   }}
                   color="error"
+                  disabled={!isOwner}
                   sx={{ 
                     width: 36, 
                     height: 36,
@@ -435,6 +570,49 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
           </Box>
         </Box>
       </AccordionDetails>
+      
+      {/* Share Dialog */}
+      <Dialog open={shareDialogOpen} onClose={handleCloseShareDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>Share Task: {task.title}</DialogTitle>
+        <DialogContent>
+          {loadingUsers ? (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <List>
+              {users.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                  No other users available to share with
+                </Typography>
+              ) : (
+                users.map((user) => {
+                  const userId = normalizeId(user);
+                  const isSelected = selectedUserIds.includes(userId);
+                  return (
+                    <ListItem key={userId} disablePadding>
+                      <ListItemButton onClick={() => handleToggleUser(userId)}>
+                        <Checkbox checked={isSelected} />
+                        <ListItemText primary={user.name} secondary={user.email} />
+                      </ListItemButton>
+                    </ListItem>
+                  );
+                })
+              )}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseShareDialog}>Cancel</Button>
+          <Button 
+            onClick={handleShare} 
+            variant="contained" 
+            disabled={sharing || selectedUserIds.length === 0}
+          >
+            {sharing ? <CircularProgress size={20} /> : 'Share'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Accordion>
   );
 };

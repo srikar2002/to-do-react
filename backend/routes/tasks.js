@@ -10,6 +10,21 @@ const router = express.Router();
 // Apply authentication middleware to all routes
 router.use(verifyToken);
 
+// Helper function to populate task with user data
+const populateTask = async (task) => {
+  await task.populate('userId', 'name email');
+  await task.populate('sharedWith', 'name email');
+  return task;
+};
+
+// Helper function to check task access (owner or shared)
+const getTaskAccessQuery = (userId) => ({
+  $or: [
+    { userId },
+    { sharedWith: userId }
+  ]
+});
+
 // Get tasks for 3-day window (Today, Tomorrow, Day After Tomorrow)
 router.get('/', async (req, res) => {
   try {
@@ -17,11 +32,12 @@ router.get('/', async (req, res) => {
     const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
     const dayAfterTomorrow = dayjs().add(2, 'day').format('YYYY-MM-DD');
     
+    // Get tasks owned by user OR shared with user
     const tasks = await Task.find({
-      userId: req.userId,
+      ...getTaskAccessQuery(req.userId),
       date: { $in: [today, tomorrow, dayAfterTomorrow] },
       archived: false
-    }).sort({ date: 1, order: 1, createdAt: 1 });
+    }).populate('userId', 'name email').populate('sharedWith', 'name email').sort({ date: 1, order: 1, createdAt: 1 });
     
     // Group tasks by date (more efficient than filtering)
     const groupedTasks = {
@@ -89,6 +105,7 @@ router.post('/', async (req, res) => {
     
     task.order = nextOrder;
     await task.save();
+    await populateTask(task);
     
     // Send email notification if enabled (don't block response if email fails)
     try {
@@ -206,6 +223,7 @@ router.post('/recurring', async (req, res) => {
       });
       
       await task.save();
+      await populateTask(task);
       createdTasks.push(task);
       taskCount++;
       
@@ -237,8 +255,11 @@ router.put('/:id', async (req, res) => {
     const { title, description, date, status, priority, tags, order } = req.body;
     const taskId = req.params.id;
     
-    // Find task and verify ownership
-    const task = await Task.findOne({ _id: taskId, userId: req.userId });
+    // Find task and verify ownership or shared access
+    const task = await Task.findOne({
+      _id: taskId,
+      ...getTaskAccessQuery(req.userId)
+    });
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
@@ -249,6 +270,7 @@ router.put('/:id', async (req, res) => {
       if (status !== undefined && status === 'Pending') {
         task.status = status;
         await task.save();
+        await populateTask(task);
         return res.json({
           message: 'Task status updated successfully',
           task
@@ -282,7 +304,7 @@ router.put('/:id', async (req, res) => {
     }
     
     await task.save();
-    
+    await populateTask(task);
     res.json({
       message: 'Task updated successfully',
       task
@@ -302,10 +324,10 @@ router.patch('/reorder', async (req, res) => {
       return res.status(400).json({ message: 'taskIds must be an array' });
     }
     
-    // Update order for all tasks
+    // Update order for all tasks (owned by user or shared with user)
     const updatePromises = taskIds.map((taskId, index) => {
       return Task.updateOne(
-        { _id: taskId, userId: req.userId },
+        { _id: taskId, ...getTaskAccessQuery(req.userId) },
         { $set: { order: index } }
       );
     });
@@ -324,9 +346,10 @@ router.delete('/:id', async (req, res) => {
   try {
     const taskId = req.params.id;
     
+    // Only owner can delete tasks
     const task = await Task.findOne({ _id: taskId, userId: req.userId });
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return res.status(404).json({ message: 'Task not found or you do not have permission to delete it' });
     }
     
     // Delete the task
@@ -387,14 +410,15 @@ router.post('/:id/archive', async (req, res) => {
   try {
     const taskId = req.params.id;
     
+    // Only owner can archive tasks
     const task = await Task.findOne({ _id: taskId, userId: req.userId });
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return res.status(404).json({ message: 'Task not found or you do not have permission to archive it' });
     }
     
     task.archived = true;
     await task.save();
-    
+    await populateTask(task);
     res.json({
       message: 'Task archived successfully',
       task
@@ -409,9 +433,9 @@ router.post('/:id/archive', async (req, res) => {
 router.get('/archived', async (req, res) => {
   try {
     const tasks = await Task.find({
-      userId: req.userId,
+      ...getTaskAccessQuery(req.userId),
       archived: true
-    }).sort({ date: -1, createdAt: -1 });
+    }).populate('userId', 'name email').populate('sharedWith', 'name email').sort({ date: -1, createdAt: -1 });
     
     res.json({
       tasks,
@@ -428,9 +452,10 @@ router.post('/:id/restore', async (req, res) => {
   try {
     const taskId = req.params.id;
     
+    // Only owner can restore tasks
     const task = await Task.findOne({ _id: taskId, userId: req.userId });
     if (!task) {
-      return res.status(404).json({ message: 'Task not found' });
+      return res.status(404).json({ message: 'Task not found or you do not have permission to restore it' });
     }
     
     if (!task.archived) {
@@ -439,7 +464,7 @@ router.post('/:id/restore', async (req, res) => {
     
     task.archived = false;
     await task.save();
-    
+    await populateTask(task);
     res.json({
       message: 'Task restored successfully',
       task
@@ -447,6 +472,94 @@ router.post('/:id/restore', async (req, res) => {
   } catch (error) {
     console.error('Restore task error:', error);
     res.status(500).json({ message: 'Server error while restoring task' });
+  }
+});
+
+// Get list of users for sharing (excluding current user)
+router.get('/users', async (req, res) => {
+  try {
+    const users = await User.find({ _id: { $ne: req.userId } })
+      .select('_id name email')
+      .sort({ name: 1 });
+    
+    res.json({ users });
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ message: 'Server error while fetching users' });
+  }
+});
+
+// Share task with users
+router.post('/:id/share', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    const { userIds } = req.body;
+    
+    // Validation
+    if (!Array.isArray(userIds)) {
+      return res.status(400).json({ message: 'userIds must be an array' });
+    }
+    
+    // Find task and verify ownership (only owner can share)
+    const task = await Task.findOne({ _id: taskId, userId: req.userId });
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found or you do not have permission to share it' });
+    }
+    
+    // Validate that all userIds exist
+    const validUsers = await User.find({ _id: { $in: userIds } });
+    if (validUsers.length !== userIds.length) {
+      return res.status(400).json({ message: 'One or more user IDs are invalid' });
+    }
+    
+    // Don't allow sharing with task owner
+    const filteredUserIds = userIds.filter(id => id.toString() !== req.userId.toString());
+    
+    // Update sharedWith array (add new users, avoid duplicates)
+    const currentSharedWith = task.sharedWith.map(id => id.toString());
+    const newUserIds = filteredUserIds.filter(id => !currentSharedWith.includes(id.toString()));
+    
+    if (newUserIds.length > 0) {
+      // Mongoose will automatically convert string IDs to ObjectIds
+      task.sharedWith = [...task.sharedWith, ...newUserIds];
+      await task.save();
+    }
+    
+    await populateTask(task);
+    res.json({
+      message: 'Task shared successfully',
+      task
+    });
+  } catch (error) {
+    console.error('Share task error:', error);
+    res.status(500).json({ message: 'Server error while sharing task' });
+  }
+});
+
+// Remove user from shared task
+router.delete('/:id/share/:userId', async (req, res) => {
+  try {
+    const taskId = req.params.id;
+    const userIdToRemove = req.params.userId;
+    
+    // Find task and verify ownership (only owner can remove sharing)
+    const task = await Task.findOne({ _id: taskId, userId: req.userId });
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found or you do not have permission to modify sharing' });
+    }
+    
+    // Remove user from sharedWith array
+    task.sharedWith = task.sharedWith.filter(id => id.toString() !== userIdToRemove);
+    await task.save();
+    
+    await populateTask(task);
+    res.json({
+      message: 'User removed from shared task',
+      task
+    });
+  } catch (error) {
+    console.error('Remove share error:', error);
+    res.status(500).json({ message: 'Server error while removing share' });
   }
 });
 

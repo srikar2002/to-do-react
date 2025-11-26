@@ -169,19 +169,43 @@ export const TaskProvider = ({ children }) => {
   }, [user]);
 
   const restoreTask = async (taskId) => {
-    if (!user) {
-      return { success: false, message: 'User not authenticated' };
-    }
-    
+    if (!user) return { success: false, message: 'User not authenticated' };
     try {
       const response = await axios.post(`/api/tasks/${taskId}/restore`);
-      await fetchArchivedTasks(); // Refresh archived tasks
-      await fetchTasks(); // Refresh main tasks
+      await Promise.all([fetchArchivedTasks(), fetchTasks()]);
       return { success: true, task: response.data.task };
     } catch (error) {
       return { 
         success: false, 
         message: error.response?.data?.message || 'Failed to restore task' 
+      };
+    }
+  };
+
+  const getUsers = async () => {
+    if (!user) return { success: false, message: 'User not authenticated', users: [] };
+    try {
+      const response = await axios.get('/api/tasks/users');
+      return { success: true, users: response.data.users || [] };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Failed to fetch users',
+        users: []
+      };
+    }
+  };
+
+  const shareTask = async (taskId, userIds) => {
+    if (!user) return { success: false, message: 'User not authenticated' };
+    try {
+      const response = await axios.post(`/api/tasks/${taskId}/share`, { userIds });
+      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
+      return { success: true, task: response.data.task };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Failed to share task' 
       };
     }
   };
@@ -218,7 +242,9 @@ export const TaskProvider = ({ children }) => {
     deleteTask,
     toggleTaskStatus,
     archiveTask,
-    restoreTask
+    restoreTask,
+    getUsers,
+    shareTask
   };
 
   return (
