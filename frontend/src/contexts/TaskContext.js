@@ -210,6 +210,20 @@ export const TaskProvider = ({ children }) => {
     }
   };
 
+  const unshareTask = async (taskId, userId) => {
+    if (!user) return { success: false, message: 'User not authenticated' };
+    try {
+      const response = await axios.delete(`/api/tasks/${taskId}/share/${userId}`);
+      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
+      return { success: true, task: response.data.task };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Failed to unshare task' 
+      };
+    }
+  };
+
   useEffect(() => {
     if (user && user.id && user.token) {
       fetchTasks();
@@ -244,7 +258,8 @@ export const TaskProvider = ({ children }) => {
     archiveTask,
     restoreTask,
     getUsers,
-    shareTask
+    shareTask,
+    unshareTask
   };
 
   return (

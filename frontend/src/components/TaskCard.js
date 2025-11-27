@@ -19,7 +19,9 @@ import {
   ListItem,
   ListItemText,
   ListItemButton,
-  CircularProgress
+  ListItemSecondaryAction,
+  CircularProgress,
+  Divider
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -31,7 +33,8 @@ import {
   ExpandMore as ExpandMoreIcon,
   Repeat as RepeatIcon,
   Share as ShareIcon,
-  People as PeopleIcon
+  People as PeopleIcon,
+  PersonRemove as PersonRemoveIcon
 } from '@mui/icons-material';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -50,7 +53,8 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
   const [selectedUserIds, setSelectedUserIds] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [sharing, setSharing] = useState(false);
-  const { getUsers, shareTask } = useTasks();
+  const [unsharingUserId, setUnsharingUserId] = useState(null);
+  const { getUsers, shareTask, unshareTask } = useTasks();
   const { user: currentUser } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   
@@ -140,6 +144,19 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
       enqueueSnackbar(result.message || 'Failed to share task', { variant: 'error' });
     }
     setSharing(false);
+  };
+
+  const handleUnshare = async (userId) => {
+    setUnsharingUserId(userId);
+    const result = await unshareTask(task._id, userId);
+    if (result.success) {
+      enqueueSnackbar('User removed from shared task', { variant: 'success' });
+      // Reload users to update the list
+      await loadUsers();
+    } else {
+      enqueueSnackbar(result.message || 'Failed to unshare task', { variant: 'error' });
+    }
+    setUnsharingUserId(null);
   };
 
   if (isCompleted) {
@@ -580,26 +597,83 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
               <CircularProgress />
             </Box>
           ) : (
-            <List>
-              {users.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
-                  No other users available to share with
-                </Typography>
-              ) : (
-                users.map((user) => {
-                  const userId = normalizeId(user);
-                  const isSelected = selectedUserIds.includes(userId);
-                  return (
-                    <ListItem key={userId} disablePadding>
-                      <ListItemButton onClick={() => handleToggleUser(userId)}>
-                        <Checkbox checked={isSelected} />
-                        <ListItemText primary={user.name} secondary={user.email} />
-                      </ListItemButton>
-                    </ListItem>
-                  );
-                })
+            <>
+              {/* Currently Shared Users Section */}
+              {isShared && task.sharedWith && task.sharedWith.length > 0 && (
+                <>
+                  <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
+                    Currently Shared With:
+                  </Typography>
+                  <List>
+                    {task.sharedWith.map((sharedUser) => {
+                      const sharedUserId = normalizeId(sharedUser);
+                      const sharedUserData = typeof sharedUser === 'object' ? sharedUser : 
+                        users.find(u => normalizeId(u) === sharedUserId);
+                      const userName = sharedUserData?.name || 'Unknown User';
+                      const userEmail = sharedUserData?.email || '';
+                      return (
+                        <ListItem key={sharedUserId} disablePadding>
+                          <ListItemText 
+                            primary={userName} 
+                            secondary={userEmail}
+                            sx={{ pr: 6 }}
+                          />
+                          <ListItemSecondaryAction>
+                            <Tooltip title="Remove sharing">
+                              <IconButton
+                                edge="end"
+                                onClick={() => handleUnshare(sharedUserId)}
+                                disabled={unsharingUserId === sharedUserId}
+                                color="error"
+                                size="small"
+                              >
+                                {unsharingUserId === sharedUserId ? (
+                                  <CircularProgress size={20} />
+                                ) : (
+                                  <PersonRemoveIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            </Tooltip>
+                          </ListItemSecondaryAction>
+                        </ListItem>
+                      );
+                    })}
+                  </List>
+                  <Divider sx={{ my: 2 }} />
+                </>
               )}
-            </List>
+              
+              {/* Available Users to Share Section */}
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                {isShared ? 'Add More Users:' : 'Select Users to Share With:'}
+              </Typography>
+              <List>
+                {users.length === 0 ? (
+                  <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                    No other users available to share with
+                  </Typography>
+                ) : (
+                  users.map((user) => {
+                    const userId = normalizeId(user);
+                    const isSelected = selectedUserIds.includes(userId);
+                    // Don't show users that are already shared
+                    const isAlreadyShared = task.sharedWith?.some(
+                      su => normalizeId(su) === userId
+                    );
+                    if (isAlreadyShared) return null;
+                    
+                    return (
+                      <ListItem key={userId} disablePadding>
+                        <ListItemButton onClick={() => handleToggleUser(userId)}>
+                          <Checkbox checked={isSelected} />
+                          <ListItemText primary={user.name} secondary={user.email} />
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })
+                )}
+              </List>
+            </>
           )}
         </DialogContent>
         <DialogActions>
