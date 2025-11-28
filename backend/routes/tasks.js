@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth');
 const dayjs = require('dayjs');
 const { sendTaskCreationEmail } = require('../utils/emailService');
+const { emitTaskUpdate, emitTaskDelete, emitTaskRefresh } = require('../websocket/socketServer');
 
 const router = express.Router();
 
@@ -106,6 +107,9 @@ router.post('/', async (req, res) => {
     task.order = nextOrder;
     await task.save();
     await populateTask(task);
+    
+    // Emit WebSocket event for real-time sync
+    emitTaskUpdate('task:created', task, [req.userId]);
     
     // Send email notification if enabled (don't block response if email fails)
     try {
@@ -227,6 +231,9 @@ router.post('/recurring', async (req, res) => {
       createdTasks.push(task);
       taskCount++;
       
+      // Emit WebSocket event for each created recurring task
+      emitTaskUpdate('task:created', task, [req.userId]);
+      
       // Calculate next occurrence date
       if (recurrencePattern === 'daily') {
         currentDate = currentDate.add(1, 'day');
@@ -271,6 +278,10 @@ router.put('/:id', async (req, res) => {
         task.status = status;
         await task.save();
         await populateTask(task);
+        
+        // Emit WebSocket event for real-time sync
+        emitTaskUpdate('task:updated', task, [req.userId]);
+        
         return res.json({
           message: 'Task status updated successfully',
           task
@@ -305,6 +316,10 @@ router.put('/:id', async (req, res) => {
     
     await task.save();
     await populateTask(task);
+    
+    // Emit WebSocket event for real-time sync
+    emitTaskUpdate('task:updated', task, [req.userId]);
+    
     res.json({
       message: 'Task updated successfully',
       task
@@ -334,6 +349,9 @@ router.patch('/reorder', async (req, res) => {
     
     await Promise.all(updatePromises);
     
+    // Emit refresh event to user for real-time sync
+    emitTaskRefresh([req.userId]);
+    
     res.json({ message: 'Task order updated successfully' });
   } catch (error) {
     console.error('Reorder tasks error:', error);
@@ -352,8 +370,15 @@ router.delete('/:id', async (req, res) => {
       return res.status(404).json({ message: 'Task not found or you do not have permission to delete it' });
     }
     
+    // Get shared users before deletion for WebSocket notification
+    const sharedUserIds = task.sharedWith ? task.sharedWith.map(id => id.toString()) : [];
+    const affectedUserIds = [req.userId.toString(), ...sharedUserIds];
+    
     // Delete the task
     await Task.findByIdAndDelete(taskId);
+    
+    // Emit WebSocket event for real-time sync
+    emitTaskDelete(taskId, affectedUserIds);
     
     res.json({ message: 'Task deleted successfully' });
   } catch (error) {
@@ -419,6 +444,10 @@ router.post('/:id/archive', async (req, res) => {
     task.archived = true;
     await task.save();
     await populateTask(task);
+    
+    // Emit WebSocket event for real-time sync
+    emitTaskUpdate('task:archived', task, [req.userId]);
+    
     res.json({
       message: 'Task archived successfully',
       task
@@ -465,6 +494,10 @@ router.post('/:id/restore', async (req, res) => {
     task.archived = false;
     await task.save();
     await populateTask(task);
+    
+    // Emit WebSocket event for real-time sync
+    emitTaskUpdate('task:restored', task, [req.userId]);
+    
     res.json({
       message: 'Task restored successfully',
       task
@@ -526,6 +559,11 @@ router.post('/:id/share', async (req, res) => {
     }
     
     await populateTask(task);
+    
+    // Emit WebSocket event to owner and newly shared users
+    const affectedUserIds = [req.userId.toString(), ...newUserIds.map(id => id.toString())];
+    emitTaskUpdate('task:shared', task, affectedUserIds);
+    
     res.json({
       message: 'Task shared successfully',
       task
@@ -553,6 +591,10 @@ router.delete('/:id/share/:userId', async (req, res) => {
     await task.save();
     
     await populateTask(task);
+    
+    // Emit WebSocket event to owner and removed user
+    emitTaskUpdate('task:unshared', task, [req.userId.toString(), userIdToRemove]);
+    
     res.json({
       message: 'User removed from shared task',
       task

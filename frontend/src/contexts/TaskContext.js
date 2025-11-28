@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import { useAuth } from './AuthContext';
 import { TaskStatus } from '../constants/enums';
+import { useSocket } from '../hooks/useSocket';
 
 const TaskContext = createContext();
 
@@ -16,6 +17,7 @@ export const useTasks = () => {
 
 export const TaskProvider = ({ children }) => {
   const { user } = useAuth();
+  const socket = useSocket();
   const [tasks, setTasks] = useState({
     today: [],
     tomorrow: [],
@@ -28,6 +30,9 @@ export const TaskProvider = ({ children }) => {
   });
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [loading, setLoading] = useState(false);
+  
+  // Keep a ref to the latest fetchTasks function to avoid stale closures
+  const fetchTasksRef = useRef(null);
 
   const fetchTasks = useCallback(async () => {
     if (!user || !user.id || !user.token) {
@@ -57,6 +62,11 @@ export const TaskProvider = ({ children }) => {
       setLoading(false);
     }
   }, [user]); // Trigger when user object changes
+  
+  // Update ref when fetchTasks changes
+  useEffect(() => {
+    fetchTasksRef.current = fetchTasks;
+  }, [fetchTasks]);
 
   const createTask = async (taskData) => {
     if (!user) {
@@ -223,6 +233,65 @@ export const TaskProvider = ({ children }) => {
       };
     }
   };
+
+  // Set up WebSocket event listeners for real-time updates
+  useEffect(() => {
+    if (!socket) return;
+
+    // Helper to remove task from date buckets
+    const removeFromDateBuckets = (taskId) => {
+      setTasks(prev => ({
+        today: prev.today.filter(t => t._id !== taskId),
+        tomorrow: prev.tomorrow.filter(t => t._id !== taskId),
+        dayAfterTomorrow: prev.dayAfterTomorrow.filter(t => t._id !== taskId)
+      }));
+    };
+
+    // Helper to refresh tasks
+    const refreshTasks = () => fetchTasksRef.current?.();
+
+    // Event handlers
+    const handlers = {
+      'task:created': () => refreshTasks(),
+      'task:updated': (task) => {
+        if (task.archived) {
+          setArchivedTasks(prev => {
+            const idx = prev.findIndex(t => t._id === task._id);
+            return idx !== -1 ? prev.map((t, i) => i === idx ? task : t) : prev;
+          });
+          removeFromDateBuckets(task._id);
+        } else {
+          refreshTasks();
+          setArchivedTasks(prev => prev.filter(t => t._id !== task._id));
+        }
+      },
+      'task:deleted': ({ taskId }) => {
+        removeFromDateBuckets(taskId);
+        setArchivedTasks(prev => prev.filter(t => t._id !== taskId));
+      },
+      'task:archived': (task) => {
+        removeFromDateBuckets(task._id);
+        refreshTasks();
+      },
+      'task:restored': (task) => {
+        setArchivedTasks(prev => prev.filter(t => t._id !== task._id));
+        refreshTasks();
+      },
+      'task:shared': refreshTasks,
+      'task:unshared': refreshTasks,
+      'tasks:refresh': refreshTasks
+    };
+
+    // Register all listeners
+    Object.entries(handlers).forEach(([event, handler]) => {
+      socket.on(event, handler);
+    });
+
+    // Cleanup
+    return () => {
+      Object.keys(handlers).forEach(event => socket.off(event));
+    };
+  }, [socket]);
 
   useEffect(() => {
     if (user && user.id && user.token) {
