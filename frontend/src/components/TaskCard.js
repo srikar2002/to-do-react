@@ -21,7 +21,9 @@ import {
   ListItemButton,
   ListItemSecondaryAction,
   CircularProgress,
-  Divider
+  Divider,
+  TextField,
+  InputAdornment
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -34,7 +36,9 @@ import {
   Repeat as RepeatIcon,
   Share as ShareIcon,
   People as PeopleIcon,
-  PersonRemove as PersonRemoveIcon
+  PersonRemove as PersonRemoveIcon,
+  Search as SearchIcon,
+  Close as CloseIcon
 } from '@mui/icons-material';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -51,9 +55,12 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
+  const [selectedUsers, setSelectedUsers] = useState([]); // Store full user objects for selected users
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [unsharingUserId, setUnsharingUserId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchTimeout, setSearchTimeout] = useState(null);
   const { getUsers, shareTask, unshareTask } = useTasks();
   const { user: currentUser } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
@@ -95,19 +102,51 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
 
   useEffect(() => {
     if (shareDialogOpen && isOwner) {
-      loadUsers();
+      // Initialize - don't pre-select already shared users for adding
+      // They will be shown in the "Currently Shared With" section
+      setSelectedUserIds([]);
+      setSelectedUsers([]);
+      setUsers([]); // Clear users when dialog opens
+      setSearchQuery(''); // Reset search
     }
   }, [shareDialogOpen, isOwner]);
 
-  const loadUsers = async () => {
+  // Search users when query changes (with debounce)
+  useEffect(() => {
+    if (!shareDialogOpen || !isOwner) return;
+    
+    // Clear previous timeout
+    if (searchTimeout) {
+      clearTimeout(searchTimeout);
+    }
+    
+    // Only search if there's a query (at least 1 character)
+    if (!searchQuery.trim()) {
+      setUsers([]); // Clear users if search is empty
+      setLoadingUsers(false);
+      return;
+    }
+    
+    // Set new timeout for debounced search
+    const timeout = setTimeout(() => {
+      loadUsers(searchQuery.trim());
+    }, 300); // 300ms debounce
+    
+    setSearchTimeout(timeout);
+    
+    return () => {
+      if (timeout) clearTimeout(timeout);
+    };
+  }, [searchQuery, shareDialogOpen, isOwner]);
+
+  const loadUsers = async (search = '') => {
     setLoadingUsers(true);
-    const result = await getUsers();
+    const result = await getUsers(search);
     if (result.success) {
       setUsers(result.users);
-      // Pre-select already shared users
-      setSelectedUserIds(task.sharedWith?.map(normalizeId) || []);
     } else {
       enqueueSnackbar(result.message || 'Failed to load users', { variant: 'error' });
+      setUsers([]);
     }
     setLoadingUsers(false);
   };
@@ -119,24 +158,44 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
   const handleCloseShareDialog = () => {
     setShareDialogOpen(false);
     setSelectedUserIds([]);
+    setSelectedUsers([]);
+    setSearchQuery('');
   };
 
   const handleToggleUser = (userId) => {
-    setSelectedUserIds(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
-    );
+    const user = users.find(u => normalizeId(u) === userId);
+    setSelectedUserIds(prev => {
+      if (prev.includes(userId)) {
+        // Remove user
+        setSelectedUsers(prevUsers => prevUsers.filter(u => normalizeId(u) !== userId));
+        return prev.filter(id => id !== userId);
+      } else {
+        // Add user
+        if (user) {
+          setSelectedUsers(prevUsers => [...prevUsers, user]);
+        }
+        return [...prev, userId];
+      }
+    });
+  };
+
+  const handleRemoveSelectedUser = (userId) => {
+    setSelectedUserIds(prev => prev.filter(id => id !== userId));
+    setSelectedUsers(prevUsers => prevUsers.filter(u => normalizeId(u) !== userId));
   };
 
   const handleShare = async () => {
-    if (selectedUserIds.length === 0) {
-      enqueueSnackbar('Please select at least one user to share with', { variant: 'warning' });
+    // Filter out users that are already shared
+    const alreadySharedIds = task.sharedWith?.map(normalizeId) || [];
+    const newUserIds = selectedUserIds.filter(id => !alreadySharedIds.includes(id));
+    
+    if (newUserIds.length === 0) {
+      enqueueSnackbar('Please select at least one new user to share with', { variant: 'warning' });
       return;
     }
     
     setSharing(true);
-    const result = await shareTask(task._id, selectedUserIds);
+    const result = await shareTask(task._id, newUserIds);
     if (result.success) {
       enqueueSnackbar('Task shared successfully', { variant: 'success' });
       handleCloseShareDialog();
@@ -592,88 +651,137 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
       <Dialog open={shareDialogOpen} onClose={handleCloseShareDialog} maxWidth="sm" fullWidth>
         <DialogTitle>Share Task: {task.title}</DialogTitle>
         <DialogContent>
-          {loadingUsers ? (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
-              <CircularProgress />
-            </Box>
-          ) : (
+          {/* Currently Shared Users Section */}
+          {isShared && task.sharedWith && task.sharedWith.length > 0 && (
             <>
-              {/* Currently Shared Users Section */}
-              {isShared && task.sharedWith && task.sharedWith.length > 0 && (
-                <>
-                  <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
-                    Currently Shared With:
-                  </Typography>
-                  <List>
-                    {task.sharedWith.map((sharedUser) => {
-                      const sharedUserId = normalizeId(sharedUser);
-                      const sharedUserData = typeof sharedUser === 'object' ? sharedUser : 
-                        users.find(u => normalizeId(u) === sharedUserId);
-                      const userName = sharedUserData?.name || 'Unknown User';
-                      const userEmail = sharedUserData?.email || '';
-                      return (
-                        <ListItem key={sharedUserId} disablePadding>
-                          <ListItemText 
-                            primary={userName} 
-                            secondary={userEmail}
-                            sx={{ pr: 6 }}
-                          />
-                          <ListItemSecondaryAction>
-                            <Tooltip title="Remove sharing">
-                              <IconButton
-                                edge="end"
-                                onClick={() => handleUnshare(sharedUserId)}
-                                disabled={unsharingUserId === sharedUserId}
-                                color="error"
-                                size="small"
-                              >
-                                {unsharingUserId === sharedUserId ? (
-                                  <CircularProgress size={20} />
-                                ) : (
-                                  <PersonRemoveIcon fontSize="small" />
-                                )}
-                              </IconButton>
-                            </Tooltip>
-                          </ListItemSecondaryAction>
-                        </ListItem>
-                      );
-                    })}
-                  </List>
-                  <Divider sx={{ my: 2 }} />
-                </>
-              )}
-              
-              {/* Available Users to Share Section */}
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
-                {isShared ? 'Add More Users:' : 'Select Users to Share With:'}
+              <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
+                Currently Shared With:
               </Typography>
               <List>
-                {users.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
-                    No other users available to share with
-                  </Typography>
-                ) : (
-                  users.map((user) => {
-                    const userId = normalizeId(user);
-                    const isSelected = selectedUserIds.includes(userId);
-                    // Don't show users that are already shared
-                    const isAlreadyShared = task.sharedWith?.some(
-                      su => normalizeId(su) === userId
-                    );
-                    if (isAlreadyShared) return null;
-                    
-                    return (
-                      <ListItem key={userId} disablePadding>
-                        <ListItemButton onClick={() => handleToggleUser(userId)}>
-                          <Checkbox checked={isSelected} />
-                          <ListItemText primary={user.name} secondary={user.email} />
-                        </ListItemButton>
-                      </ListItem>
-                    );
-                  })
-                )}
+                {task.sharedWith.map((sharedUser) => {
+                  const sharedUserId = normalizeId(sharedUser);
+                  const sharedUserData = typeof sharedUser === 'object' ? sharedUser : 
+                    users.find(u => normalizeId(u) === sharedUserId) ||
+                    selectedUsers.find(u => normalizeId(u) === sharedUserId);
+                  const userName = sharedUserData?.name || 'Unknown User';
+                  const userEmail = sharedUserData?.email || '';
+                  return (
+                    <ListItem key={sharedUserId} disablePadding>
+                      <ListItemText 
+                        primary={userName} 
+                        secondary={userEmail}
+                        sx={{ pr: 6 }}
+                      />
+                      <ListItemSecondaryAction>
+                        <Tooltip title="Remove sharing">
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleUnshare(sharedUserId)}
+                            disabled={unsharingUserId === sharedUserId}
+                            color="error"
+                            size="small"
+                          >
+                            {unsharingUserId === sharedUserId ? (
+                              <CircularProgress size={20} />
+                            ) : (
+                              <PersonRemoveIcon fontSize="small" />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  );
+                })}
               </List>
+              <Divider sx={{ my: 2 }} />
             </>
+          )}
+          
+          {/* Selected Users to Add Section */}
+          {selectedUserIds.length > 0 && (
+            <>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                Selected to Add:
+              </Typography>
+              <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                {selectedUsers.map((user) => {
+                  const userId = normalizeId(user);
+                  // Don't show users that are already shared
+                  const isAlreadyShared = task.sharedWith?.some(
+                    su => normalizeId(su) === userId
+                  );
+                  if (isAlreadyShared) return null;
+                  
+                  return (
+                    <Chip
+                      key={userId}
+                      label={`${user.name}${user.email ? ` (${user.email})` : ''}`}
+                      onDelete={() => handleRemoveSelectedUser(userId)}
+                      deleteIcon={<CloseIcon />}
+                      color="primary"
+                      variant="outlined"
+                      size="small"
+                    />
+                  );
+                })}
+              </Box>
+              <Divider sx={{ my: 2 }} />
+            </>
+          )}
+          
+          {/* Search and Add Users Section */}
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+            {isShared ? 'Search and Add More Users:' : 'Search and Add Users:'}
+          </Typography>
+          <TextField
+            fullWidth
+            placeholder="Search users by name or email..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
+            sx={{ mb: 2 }}
+            size="small"
+          />
+          
+          {loadingUsers ? (
+            <Box display="flex" justifyContent="center" alignItems="center" minHeight={100}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : (
+            <List>
+              {users.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                  {searchQuery.trim() 
+                    ? 'No users found matching your search' 
+                    : 'Type in the search box above to find users'}
+                </Typography>
+              ) : (
+                users.map((user) => {
+                  const userId = normalizeId(user);
+                  const isSelected = selectedUserIds.includes(userId);
+                  // Don't show users that are already shared
+                  const isAlreadyShared = task.sharedWith?.some(
+                    su => normalizeId(su) === userId
+                  );
+                  if (isAlreadyShared) return null;
+                  
+                  return (
+                    <ListItem key={userId} disablePadding>
+                      <ListItemButton onClick={() => handleToggleUser(userId)}>
+                        <Checkbox checked={isSelected} />
+                        <ListItemText primary={user.name} secondary={user.email} />
+                      </ListItemButton>
+                    </ListItem>
+                  );
+                })
+              )}
+            </List>
           )}
         </DialogContent>
         <DialogActions>

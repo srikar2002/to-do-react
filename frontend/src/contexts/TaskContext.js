@@ -192,10 +192,11 @@ export const TaskProvider = ({ children }) => {
     }
   };
 
-  const getUsers = async () => {
+  const getUsers = async (search = '') => {
     if (!user) return { success: false, message: 'User not authenticated', users: [] };
     try {
-      const response = await axios.get('/api/tasks/users');
+      const params = search ? { params: { search } } : {};
+      const response = await axios.get('/api/tasks/users', params);
       return { success: true, users: response.data.users || [] };
     } catch (error) {
       return { 

@@ -511,9 +511,24 @@ router.post('/:id/restore', async (req, res) => {
 // Get list of users for sharing (excluding current user)
 router.get('/users', async (req, res) => {
   try {
-    const users = await User.find({ _id: { $ne: req.userId } })
+    const { search } = req.query;
+    
+    // Build query to exclude current user
+    const query = { _id: { $ne: req.userId } };
+    
+    // Add search filter if provided
+    if (search && search.trim()) {
+      const searchRegex = new RegExp(search.trim(), 'i'); // Case-insensitive search
+      query.$or = [
+        { name: searchRegex },
+        { email: searchRegex }
+      ];
+    }
+    
+    const users = await User.find(query)
       .select('_id name email')
-      .sort({ name: 1 });
+      .sort({ name: 1 })
+      .limit(50); // Limit results to prevent excessive data transfer
     
     res.json({ users });
   } catch (error) {
