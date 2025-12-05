@@ -5,6 +5,7 @@ const { verifyToken } = require('../middleware/auth');
 const dayjs = require('dayjs');
 const { sendTaskCreationEmail } = require('../utils/emailService');
 const { emitTaskUpdate, emitTaskDelete, emitTaskRefresh } = require('../websocket/socketServer');
+const { createEventFromTask, getValidAccessToken } = require('../utils/googleCalendarService');
 
 const router = express.Router();
 
@@ -25,6 +26,26 @@ const getTaskAccessQuery = (userId) => ({
     { sharedWith: userId }
   ]
 });
+
+// Helper function to create Google Calendar event for a task
+const createCalendarEventForTask = async (user, task) => {
+  if (!user?.googleCalendarEnabled || !user?.googleAccessToken) return;
+  
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return;
+
+  try {
+    const { token: accessToken, refreshed } = await getValidAccessToken(user, clientId, clientSecret);
+    if (refreshed) await user.save();
+    
+    createEventFromTask(accessToken, task)
+      .then(event => console.log('Google Calendar event created:', event.id))
+      .catch(err => console.error('Failed to create Google Calendar event:', err));
+  } catch (error) {
+    console.error('Error creating Google Calendar event:', error);
+  }
+};
 
 // Get tasks for 3-day window (Today, Tomorrow, Day After Tomorrow)
 router.get('/', async (req, res) => {
@@ -126,6 +147,9 @@ router.post('/', async (req, res) => {
           console.error('Failed to send task creation email:', err);
         });
       }
+
+      // Create Google Calendar event if enabled (don't block response if it fails)
+      createCalendarEventForTask(user, task);
     } catch (emailError) {
       // Log error but don't fail the task creation
       console.error('Error checking notification preferences:', emailError);
@@ -197,6 +221,7 @@ router.post('/recurring', async (req, res) => {
     await parentTask.save();
     
     // Generate task instances
+    const user = await User.findById(req.userId);
     let currentDate = start;
     let taskCount = 0;
     const maxTasks = 365; // Limit to prevent excessive task creation
@@ -233,6 +258,9 @@ router.post('/recurring', async (req, res) => {
       
       // Emit WebSocket event for each created recurring task
       emitTaskUpdate('task:created', task, [req.userId]);
+      
+      // Create Google Calendar event for recurring task if enabled
+      createCalendarEventForTask(user, task);
       
       // Calculate next occurrence date
       if (recurrencePattern === 'daily') {

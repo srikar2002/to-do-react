@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Container, Typography, Box, Button, FormControl, InputLabel, Select, MenuItem, Card, CardContent, Alert, CircularProgress, Avatar, Switch, FormControlLabel } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon, Notifications as NotificationsIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon, Notifications as NotificationsIcon, CalendarToday as CalendarIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import axios from 'axios';
@@ -17,12 +17,16 @@ const Profile = () => {
   const { darkMode } = useTheme();
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [timezone, setTimezone] = useState(user?.timezone || 'Asia/Kolkata');
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(user?.emailNotificationsEnabled || false);
   const [loading, setLoading] = useState(false);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [calendarConnected, setCalendarConnected] = useState(false);
+  const [calendarLoading, setCalendarLoading] = useState(false);
+  const [checkingCalendar, setCheckingCalendar] = useState(true);
 
   // Update timezone and notifications when user data changes
   useEffect(() => {
@@ -34,6 +38,86 @@ const Profile = () => {
       setEmailNotificationsEnabled(user.emailNotificationsEnabled);
     }
   }, [user]);
+
+  // Check Google Calendar connection status
+  useEffect(() => {
+    checkCalendarStatus();
+    
+    // Check for OAuth callback results
+    const calendarSuccess = searchParams.get('calendar_success');
+    const calendarError = searchParams.get('calendar_error');
+    
+    if (calendarSuccess === 'true') {
+      setSuccess('Google Calendar connected successfully!');
+      checkCalendarStatus();
+      // Remove query params from URL
+      navigate('/profile', { replace: true });
+    } else if (calendarError) {
+      setError(`Google Calendar connection failed: ${decodeURIComponent(calendarError)}`);
+      // Remove query params from URL
+      navigate('/profile', { replace: true });
+    }
+  }, [searchParams, navigate]);
+
+  const checkCalendarStatus = async () => {
+    if (!user?.token) return;
+    
+    setCheckingCalendar(true);
+    try {
+      const response = await axios.get('/api/auth/google-calendar/status', {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      setCalendarConnected(response.data.connected);
+    } catch (error) {
+      console.error('Error checking calendar status:', error);
+      setCalendarConnected(false);
+    } finally {
+      setCheckingCalendar(false);
+    }
+  };
+
+  const handleConnectCalendar = async () => {
+    if (!user?.token) {
+      setError('Please log in to connect Google Calendar');
+      return;
+    }
+    
+    setCalendarLoading(true);
+    setError('');
+    try {
+      const response = await axios.get('/api/auth/google-calendar/authorize', {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      // Redirect to Google authorization page
+      window.location.href = response.data.authorizationUrl;
+    } catch (error) {
+      console.error('Error connecting calendar:', error);
+      setError(error.response?.data?.message || 'Failed to connect Google Calendar');
+      setCalendarLoading(false);
+    }
+  };
+
+  const handleDisconnectCalendar = async () => {
+    if (!user?.token) {
+      setError('Please log in to disconnect Google Calendar');
+      return;
+    }
+    
+    setCalendarLoading(true);
+    setError('');
+    try {
+      await axios.delete('/api/auth/google-calendar/disconnect', {
+        headers: { 'Authorization': `Bearer ${user.token}` }
+      });
+      setCalendarConnected(false);
+      setSuccess('Google Calendar disconnected successfully');
+    } catch (error) {
+      console.error('Error disconnecting calendar:', error);
+      setError(error.response?.data?.message || 'Failed to disconnect Google Calendar');
+    } finally {
+      setCalendarLoading(false);
+    }
+  };
 
   const handleTimezoneChange = async (e) => {
     const tz = e.target.value;
@@ -159,7 +243,7 @@ const Profile = () => {
           </FormControl>
 
           {/* Email Notifications Toggle */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
             <NotificationsIcon color="action" />
             <FormControlLabel
               control={
@@ -179,6 +263,52 @@ const Profile = () => {
               }
             />
             {notificationLoading && <CircularProgress size={20} />}
+          </Box>
+
+          {/* Google Calendar Integration */}
+          <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 3, mt: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+              <CalendarIcon color="action" />
+              <Typography variant="h6" component="div">
+                Google Calendar Integration
+              </Typography>
+            </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Connect your Google Calendar to automatically create calendar events when you create tasks.
+            </Typography>
+            {checkingCalendar ? (
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <CircularProgress size={20} />
+                <Typography variant="body2">Checking connection status...</Typography>
+              </Box>
+            ) : calendarConnected ? (
+              <Box>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                  <CheckCircleIcon color="success" />
+                  <Typography variant="body1" color="success.main">
+                    Connected to Google Calendar
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={handleDisconnectCalendar}
+                  disabled={calendarLoading}
+                  startIcon={<CancelIcon />}
+                >
+                  {calendarLoading ? 'Disconnecting...' : 'Disconnect Calendar'}
+                </Button>
+              </Box>
+            ) : (
+              <Button
+                variant="contained"
+                onClick={handleConnectCalendar}
+                disabled={calendarLoading}
+                startIcon={<CalendarIcon />}
+              >
+                {calendarLoading ? 'Connecting...' : 'Connect Google Calendar'}
+              </Button>
+            )}
           </Box>
         </CardContent>
       </Card>

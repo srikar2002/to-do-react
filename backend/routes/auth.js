@@ -1,8 +1,11 @@
 const express = require('express');
 const User = require('../models/User');
 const { generateToken, verifyToken } = require('../middleware/auth');
+const { getAuthorizationUrl, exchangeCodeForTokens } = require('../utils/googleCalendarService');
 
 const router = express.Router();
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const getRedirectUrl = (req) => process.env.GOOGLE_REDIRECT_URI || `${req.protocol}://${req.get('host')}/api/auth/google-calendar/callback`;
 
 // Register
 router.post('/register', async (req, res) => {
@@ -174,6 +177,78 @@ router.patch('/preferences/notifications', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('Update notification preference error:', error);
     res.status(500).json({ message: 'Server error while updating notification preference' });
+  }
+});
+
+// Google Calendar OAuth - Initiate authorization
+router.get('/google-calendar/authorize', verifyToken, async (req, res) => {
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!clientId) return res.status(500).json({ message: 'Google Calendar integration not configured' });
+    
+    res.json({ authorizationUrl: getAuthorizationUrl(clientId, getRedirectUrl(req), req.userId.toString()) });
+  } catch (error) {
+    console.error('Google Calendar authorization error:', error);
+    res.status(500).json({ message: 'Server error while initiating Google Calendar authorization' });
+  }
+});
+
+// Google Calendar OAuth - Handle callback
+router.get('/google-calendar/callback', async (req, res) => {
+  try {
+    const { code, state, error } = req.query;
+    const redirect = (error) => res.redirect(`${FRONTEND_URL}/profile?calendar_error=${encodeURIComponent(error)}`);
+    
+    if (error) return redirect(error);
+    if (!code || !state) return redirect('missing_parameters');
+
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return redirect('not_configured');
+
+    const tokenResponse = await exchangeCodeForTokens(code, clientId, clientSecret, getRedirectUrl(req));
+    const user = await User.findById(state);
+    if (!user) return redirect('user_not_found');
+
+    user.googleAccessToken = tokenResponse.access_token;
+    user.googleRefreshToken = tokenResponse.refresh_token;
+    user.googleCalendarEnabled = true;
+    await user.save();
+
+    res.redirect(`${FRONTEND_URL}/profile?calendar_success=true`);
+  } catch (error) {
+    console.error('Google Calendar callback error:', error);
+    res.redirect(`${FRONTEND_URL}/profile?calendar_error=${encodeURIComponent(error.message)}`);
+  }
+});
+
+// Check Google Calendar connection status
+router.get('/google-calendar/status', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    res.json({ connected: user.googleCalendarEnabled && !!user.googleAccessToken, enabled: user.googleCalendarEnabled });
+  } catch (error) {
+    console.error('Google Calendar status error:', error);
+    res.status(500).json({ message: 'Server error while checking Google Calendar status' });
+  }
+});
+
+// Disconnect Google Calendar
+router.delete('/google-calendar/disconnect', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    
+    user.googleAccessToken = null;
+    user.googleRefreshToken = null;
+    user.googleCalendarEnabled = false;
+    await user.save();
+
+    res.json({ message: 'Google Calendar disconnected successfully', connected: false });
+  } catch (error) {
+    console.error('Google Calendar disconnect error:', error);
+    res.status(500).json({ message: 'Server error while disconnecting Google Calendar' });
   }
 });
 
