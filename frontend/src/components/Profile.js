@@ -4,6 +4,7 @@ import { Container, Typography, Box, Button, FormControl, InputLabel, Select, Me
 import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon, Notifications as NotificationsIcon, CalendarToday as CalendarIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
+import { getProfileStyles } from '../styles/profileStyles';
 import axios from 'axios';
 
 const TIMEZONES = [
@@ -174,28 +175,32 @@ const Profile = () => {
     }
   };
 
+  const styles = getProfileStyles(darkMode);
+
   return (
-    <Container maxWidth="md" sx={{ mt: 4, mb: 4 }}>
-      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/dashboard')} sx={{ mb: 3 }}>Back to Dashboard</Button>
+    <Container maxWidth="md" sx={styles.container}>
+      <Button startIcon={<ArrowBackIcon />} onClick={() => navigate('/dashboard')} sx={styles.backButton}>
+        Back to Dashboard
+      </Button>
       
       {/* User Information Card */}
-      <Card sx={{ boxShadow: darkMode ? '0 4px 24px rgba(0, 0, 0, 0.6)' : '0 4px 24px rgba(0, 0, 0, 0.1)', mb: 3 }}>
-        <CardContent sx={{ p: 4 }}>
-          <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 3, fontWeight: 600 }}>
+      <Card sx={styles.card}>
+        <CardContent sx={styles.cardContent}>
+          <Typography variant="h5" component="h2" gutterBottom sx={styles.title}>
             User Information
           </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-            <Avatar sx={{ width: 64, height: 64, bgcolor: 'primary.main' }}>
+          <Box sx={styles.userInfoBox}>
+            <Avatar sx={styles.avatar}>
               {user?.name?.charAt(0)?.toUpperCase() || 'U'}
             </Avatar>
             <Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Box sx={styles.userDetailBox}>
                 <PersonIcon color="action" fontSize="small" />
                 <Typography variant="h6" component="div">
                   {user?.name || 'N/A'}
                 </Typography>
               </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={styles.emailBox}>
                 <EmailIcon color="action" fontSize="small" />
                 <Typography variant="body1" color="text.secondary">
                   {user?.email || 'N/A'}
@@ -207,29 +212,29 @@ const Profile = () => {
       </Card>
 
       {/* Timezone Settings Card */}
-      <Card sx={{ boxShadow: darkMode ? '0 4px 24px rgba(0, 0, 0, 0.6)' : '0 4px 24px rgba(0, 0, 0, 0.1)' }}>
-        <CardContent sx={{ p: 4 }}>
-          <Typography variant="h5" component="h2" gutterBottom sx={{ mb: 3, fontWeight: 400 }}>
+      <Card sx={styles.card}>
+        <CardContent sx={styles.cardContent}>
+          <Typography variant="h5" component="h2" gutterBottom sx={styles.preferencesTitle}>
             Preferences
           </Typography>
           {error && (
-            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError('')}>
+            <Alert severity="error" sx={styles.alert} onClose={() => setError('')}>
               {error}
             </Alert>
           )}
           {success && (
-            <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess('')}>
+            <Alert severity="success" sx={styles.alert} onClose={() => setSuccess('')}>
               {success}
             </Alert>
           )}
-          <FormControl fullWidth disabled={loading} sx={{ mb: 3 }}>
+          <FormControl fullWidth disabled={loading} sx={styles.formControl}>
             <InputLabel id="timezone-select-label">Select Timezone</InputLabel>
             <Select 
               labelId="timezone-select-label" 
               value={timezone} 
               label="Select Timezone" 
               onChange={handleTimezoneChange}
-              endAdornment={loading && <CircularProgress size={20} sx={{ mr: 2 }} />}
+              endAdornment={loading && <CircularProgress size={20} sx={styles.circularProgress} />}
             >
               {TIMEZONES.map((tz) => (
                 <MenuItem key={tz.value} value={tz.value}>
@@ -243,7 +248,7 @@ const Profile = () => {
           </FormControl>
 
           {/* Email Notifications Toggle */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 3 }}>
+          <Box sx={styles.notificationBox}>
             <NotificationsIcon color="action" />
             <FormControlLabel
               control={
@@ -266,24 +271,24 @@ const Profile = () => {
           </Box>
 
           {/* Google Calendar Integration */}
-          <Box sx={{ borderTop: 1, borderColor: 'divider', pt: 3, mt: 3 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+          <Box sx={styles.calendarSection}>
+            <Box sx={styles.calendarHeaderBox}>
               <CalendarIcon color="action" />
               <Typography variant="h6" component="div">
                 Google Calendar Integration
               </Typography>
             </Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <Typography variant="body2" color="text.secondary" sx={styles.calendarDescription}>
               Connect your Google Calendar to automatically create calendar events when you create tasks.
             </Typography>
             {checkingCalendar ? (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <Box sx={styles.calendarStatusBox}>
                 <CircularProgress size={20} />
                 <Typography variant="body2">Checking connection status...</Typography>
               </Box>
             ) : calendarConnected ? (
               <Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
+                <Box sx={styles.calendarConnectedBox}>
                   <CheckCircleIcon color="success" />
                   <Typography variant="body1" color="success.main">
                     Connected to Google Calendar

@@ -46,6 +46,7 @@ import { TaskStatus, TaskPriority } from '../constants/enums';
 import { useTasks } from '../contexts/TaskContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useSnackbar } from 'notistack';
+import { getTaskCardStyles } from '../styles/taskCardStyles';
 
 const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive, onRestore, showArchive = true }) => {
   const theme = useTheme();
@@ -99,6 +100,8 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
     opacity: isDragging ? 0.5 : (isCompleted ? 0.7 : 1),
     cursor: isCompleted || isArchived ? 'default' : 'grab'
   };
+
+  const styles = getTaskCardStyles(theme, isArchived, isCompleted);
 
   useEffect(() => {
     if (shareDialogOpen && isOwner) {
@@ -224,53 +227,21 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
         ref={setNodeRef}
         style={style}
         {...attributes}
-        sx={{
-          mb: 1,
-          p: 1.5,
-          backgroundColor: theme.palette.mode === 'dark' 
-            ? 'rgba(255, 255, 255, 0.06)' 
-            : 'rgba(245, 245, 245, 0.9)',
-          boxShadow: theme.palette.mode === 'dark' 
-            ? '0 1px 4px rgba(0, 0, 0, 0.2)' 
-            : '0 1px 3px rgba(0, 0, 0, 0.08)',
-          border: theme.palette.mode === 'dark' 
-            ? '1px solid rgba(255, 255, 255, 0.08)' 
-            : '1px solid rgba(0, 0, 0, 0.08)',
-          borderRadius: 2,
-          transition: 'all 0.2s ease-in-out',
-          '&:hover': {
-            backgroundColor: theme.palette.mode === 'dark' 
-              ? 'rgba(255, 255, 255, 0.08)' 
-              : 'rgba(245, 245, 245, 1)',
-            boxShadow: theme.palette.mode === 'dark' 
-              ? '0 2px 8px rgba(0, 0, 0, 0.3)' 
-              : '0 2px 6px rgba(0, 0, 0, 0.1)'
-          }
-        }}
+        sx={styles.completedCard}
       >
-        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" sx={{ minWidth: 0, overflow: 'hidden' }}>
-          <Box sx={{ minWidth: 0, flexGrow: 1, overflow: 'hidden', mr: 1 }}>
+        <Box display="flex" alignItems="center" justifyContent="space-between" width="100%" sx={styles.completedFlexBox}>
+          <Box sx={styles.completedTitleBox}>
             <Tooltip title={task.title} placement="top-start">
               <Typography 
                 variant="body2"
                 component="h3" 
-                sx={{ 
-                  textDecoration: 'line-through',
-                  color: 'text.secondary',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                  fontSize: '0.875rem',
-                  fontWeight: 400,
-                  lineHeight: 1.4,
-                  minWidth: 0
-                }}
+                sx={styles.completedTitle}
               >
                 {task.title}
               </Typography>
             </Tooltip>
           </Box>
-          <Box display="flex" alignItems="center" gap={0.5} sx={{ flexShrink: 0 }}>
+          <Box display="flex" alignItems="center" gap={0.5} sx={styles.completedActionsBox}>
             <Tooltip title={isArchived ? "Cannot change status of archived tasks" : "Mark as incomplete"}>
               <span>
                 <IconButton 
@@ -283,7 +254,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   }}
                   color="success"
                   disabled={isArchived}
-                  sx={{ padding: 0.5, minWidth: 32, width: 32, height: 32 }}
+                  sx={styles.completedIconButton}
                 >
                   <CheckCircleIcon fontSize="small" />
                 </IconButton>
@@ -301,17 +272,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   }}
                   color="error"
                   disabled={!isOwner}
-                  sx={{ 
-                    padding: 0.5,
-                    minWidth: 32,
-                    width: 32,
-                    height: 32,
-                    '&:hover': {
-                      backgroundColor: theme.palette.mode === 'dark' 
-                        ? 'rgba(211, 47, 47, 0.16)' 
-                        : 'rgba(211, 47, 47, 0.08)'
-                    }
-                  }}
+                  sx={styles.deleteIconButton}
                 >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
@@ -330,78 +291,20 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
       {...attributes}
       expanded={expanded}
       onChange={() => setExpanded(!expanded)}
-      sx={{
-        mb: 2,
-        backgroundColor: theme.palette.mode === 'dark' 
-          ? 'rgba(255, 255, 255, 0.08)' 
-          : 'rgba(255, 255, 255, 0.95)',
-        boxShadow: theme.palette.mode === 'dark' 
-          ? '0 2px 8px rgba(0, 0, 0, 0.3)' 
-          : '0 2px 6px rgba(0, 0, 0, 0.08)',
-        border: theme.palette.mode === 'dark' 
-          ? '1px solid rgba(255, 255, 255, 0.1)' 
-          : '1px solid rgba(0, 0, 0, 0.1)',
-        borderRadius: 2,
-        transition: 'all 0.2s ease-in-out',
-        '&:hover': {
-          backgroundColor: theme.palette.mode === 'dark' 
-            ? 'rgba(255, 255, 255, 0.12)' 
-            : 'rgba(255, 255, 255, 1)',
-          boxShadow: isArchived 
-            ? (theme.palette.mode === 'dark' ? '0 2px 8px rgba(0, 0, 0, 0.3)' : '0 2px 6px rgba(0, 0, 0, 0.08)')
-            : (theme.palette.mode === 'dark' ? '0 4px 16px rgba(0, 0, 0, 0.4)' : '0 4px 12px rgba(0, 0, 0, 0.12)'),
-          transform: isArchived ? 'none' : 'translateY(-2px)',
-          border: theme.palette.mode === 'dark' 
-            ? '1px solid rgba(255, 255, 255, 0.15)' 
-            : '1px solid rgba(0, 0, 0, 0.15)'
-        },
-        '&:before': {
-          display: 'none'
-        },
-        '&.Mui-expanded': {
-          margin: '0 0 16px 0'
-        }
-      }}
+      sx={styles.accordion}
     >
         <AccordionSummary
           expandIcon={<ExpandMoreIcon />}
           {...(!isArchived && !isCompleted ? { ...attributes, ...listeners } : {})}
-          sx={{
-            minHeight: 56,
-            py: 1,
-            cursor: isCompleted || isArchived ? 'default' : 'grab',
-            '&:active': {
-              cursor: isCompleted || isArchived ? 'default' : 'grabbing'
-            },
-            '&.Mui-expanded': {
-              minHeight: 56
-            },
-            '& .MuiAccordionSummary-content': {
-              margin: '12px 0',
-              alignItems: 'center',
-              minWidth: 0,
-              overflow: 'hidden',
-              '&.Mui-expanded': {
-                margin: '12px 0'
-              }
-            }
-          }}
+          sx={styles.accordionSummary}
         >
-          <Box display="flex" alignItems="center" width="100%" pr={1} sx={{ minWidth: 0, overflow: 'hidden' }}>
-            <Box sx={{ minWidth: 0, flexGrow: 1, overflow: 'hidden' }}>
+          <Box display="flex" alignItems="center" width="100%" pr={1} sx={styles.accordionFlexBox}>
+            <Box sx={styles.titleBox}>
               <Tooltip title={task.title} placement="top-start">
                 <Typography 
                   variant="subtitle1"
                   component="h3" 
-                  sx={{ 
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    fontWeight: 500,
-                    fontSize: '0.95rem',
-                    lineHeight: 1.4,
-                    minWidth: 0
-                  }}
+                  sx={styles.title}
                 >
                   {task.title}
                 </Typography>
@@ -409,33 +312,28 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
             </Box>
           </Box>
         </AccordionSummary>
-      <AccordionDetails sx={{ pt: 2, pb: 2, px: 2 }}>
+      <AccordionDetails sx={styles.accordionDetails}>
         <Box display="flex" alignItems="flex-start" justifyContent="space-between" gap={2}>
           <Box 
             flexGrow={1} 
-            sx={{ minWidth: 0 }}
+            sx={styles.detailsContentBox}
           >
             {task.description && (
               <Typography 
                 variant="body2" 
                 color="text.secondary" 
-                sx={{ 
-                  mb: 1.5,
-                  wordBreak: 'break-word',
-                  lineHeight: 1.6,
-                  fontSize: '0.875rem'
-                }}
+                sx={styles.description}
               >
                 {task.description}
               </Typography>
             )}
-            <Box display="flex" gap={0.75} flexWrap="wrap" alignItems="center">
+            <Box display="flex" gap={0.75} flexWrap="wrap" alignItems="center" sx={styles.tagsBox}>
               <Chip 
                 label={task.status} 
                 size="small" 
                 color="default"
                 variant="outlined"
-                sx={{ fontSize: '0.75rem', height: 24 }}
+                sx={styles.chip}
               />
               {task.priority && (
                 <Chip 
@@ -447,7 +345,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                     'default'
                   }
                   variant="outlined"
-                  sx={{ fontSize: '0.75rem', height: 24 }}
+                  sx={styles.chip}
                 />
               )}
               {task.rollover && (
@@ -456,27 +354,27 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   size="small" 
                   color="info"
                   variant="outlined"
-                  sx={{ fontSize: '0.75rem', height: 24 }}
+                  sx={styles.chip}
                 />
               )}
               {task.parentTaskId && (
                 <Chip 
-                  icon={<RepeatIcon sx={{ fontSize: '0.875rem !important' }} />}
+                  icon={<RepeatIcon sx={styles.chipIcon} />}
                   label="Recurring" 
                   size="small" 
                   color="secondary"
                   variant="outlined"
-                  sx={{ fontSize: '0.75rem', height: 24 }}
+                  sx={styles.chip}
                 />
               )}
               {isShared && (
                 <Chip 
-                  icon={<PeopleIcon sx={{ fontSize: '0.875rem !important' }} />}
+                  icon={<PeopleIcon sx={styles.chipIcon} />}
                   label={`Shared (${task.sharedWith?.length || 0})`}
                   size="small" 
                   color="info"
                   variant="outlined"
-                  sx={{ fontSize: '0.75rem', height: 24 }}
+                  sx={styles.chip}
                 />
               )}
               {!isOwner && task.userId && (
@@ -485,7 +383,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   size="small" 
                   color="default"
                   variant="outlined"
-                  sx={{ fontSize: '0.75rem', height: 24 }}
+                  sx={styles.chip}
                 />
               )}
               {task.tags && task.tags.length > 0 && task.tags.map((tag, index) => (
@@ -495,12 +393,12 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   size="small"
                   color="primary"
                   variant="outlined"
-                  sx={{ fontSize: '0.75rem', height: 24 }}
+                  sx={styles.chip}
                 />
               ))}
             </Box>
           </Box>
-          <Box display="flex" flexDirection="column" gap={0.75} sx={{ flexShrink: 0 }}>
+          <Box display="flex" flexDirection="column" gap={0.75} sx={styles.actionsBox}>
             <Tooltip title={isArchived ? "Cannot change status of archived tasks" : "Mark as completed"}>
               <span>
                 <IconButton 
@@ -513,15 +411,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   }}
                   color="default"
                   disabled={isArchived}
-                  sx={{ 
-                    width: 36, 
-                    height: 36,
-                    '&:hover': {
-                      backgroundColor: theme.palette.mode === 'dark' 
-                        ? 'rgba(255, 255, 255, 0.08)' 
-                        : 'rgba(0, 0, 0, 0.04)'
-                    }
-                  }}
+                  sx={styles.iconButton}
                 >
                   <RadioButtonUncheckedIcon fontSize="small" />
                 </IconButton>
@@ -536,15 +426,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                     onEdit();
                   }} 
                   color="primary"
-                  sx={{ 
-                    width: 36, 
-                    height: 36,
-                    '&:hover': {
-                      backgroundColor: theme.palette.mode === 'dark' 
-                        ? 'rgba(25, 118, 210, 0.16)' 
-                        : 'rgba(25, 118, 210, 0.08)'
-                    }
-                  }}
+                  sx={styles.editIconButton}
                 >
                   <EditIcon fontSize="small" />
                 </IconButton>
@@ -559,15 +441,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                     onArchive();
                   }} 
                   color="default"
-                  sx={{ 
-                    width: 36, 
-                    height: 36,
-                    '&:hover': {
-                      backgroundColor: theme.palette.mode === 'dark' 
-                        ? 'rgba(255, 255, 255, 0.08)' 
-                        : 'rgba(0, 0, 0, 0.04)'
-                    }
-                  }}
+                  sx={styles.archiveIconButton}
                 >
                   <ArchiveIcon fontSize="small" />
                 </IconButton>
@@ -582,15 +456,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                     onRestore();
                   }} 
                   color="primary"
-                  sx={{ 
-                    width: 36, 
-                    height: 36,
-                    '&:hover': {
-                      backgroundColor: theme.palette.mode === 'dark' 
-                        ? 'rgba(25, 118, 210, 0.16)' 
-                        : 'rgba(25, 118, 210, 0.08)'
-                    }
-                  }}
+                  sx={styles.restoreIconButton}
                 >
                   <UnarchiveIcon fontSize="small" />
                 </IconButton>
@@ -605,15 +471,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                     handleOpenShareDialog();
                   }} 
                   color="primary"
-                  sx={{ 
-                    width: 36, 
-                    height: 36,
-                    '&:hover': {
-                      backgroundColor: theme.palette.mode === 'dark' 
-                        ? 'rgba(25, 118, 210, 0.16)' 
-                        : 'rgba(25, 118, 210, 0.08)'
-                    }
-                  }}
+                  sx={styles.shareIconButton}
                 >
                   <ShareIcon fontSize="small" />
                 </IconButton>
@@ -629,15 +487,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   }}
                   color="error"
                   disabled={!isOwner}
-                  sx={{ 
-                    width: 36, 
-                    height: 36,
-                    '&:hover': {
-                      backgroundColor: theme.palette.mode === 'dark' 
-                        ? 'rgba(211, 47, 47, 0.16)' 
-                        : 'rgba(211, 47, 47, 0.08)'
-                    }
-                  }}
+                  sx={styles.deleteIconButtonAccordion}
                 >
                   <DeleteIcon fontSize="small" />
                 </IconButton>
@@ -654,7 +504,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
           {/* Currently Shared Users Section */}
           {isShared && task.sharedWith && task.sharedWith.length > 0 && (
             <>
-              <Typography variant="subtitle2" sx={{ mt: 1, mb: 1, fontWeight: 600 }}>
+              <Typography variant="subtitle2" sx={styles.shareDialogSubtitle}>
                 Currently Shared With:
               </Typography>
               <List>
@@ -670,7 +520,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                       <ListItemText 
                         primary={userName} 
                         secondary={userEmail}
-                        sx={{ pr: 6 }}
+                        sx={styles.shareDialogList}
                       />
                       <ListItemSecondaryAction>
                         <Tooltip title="Remove sharing">
@@ -693,17 +543,17 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   );
                 })}
               </List>
-              <Divider sx={{ my: 2 }} />
+              <Divider sx={styles.divider} />
             </>
           )}
           
           {/* Selected Users to Add Section */}
           {selectedUserIds.length > 0 && (
             <>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+              <Typography variant="subtitle2" sx={styles.shareDialogSubtitle}>
                 Selected to Add:
               </Typography>
-              <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={styles.shareDialogSelectedBox}>
                 {selectedUsers.map((user) => {
                   const userId = normalizeId(user);
                   // Don't show users that are already shared
@@ -725,12 +575,12 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   );
                 })}
               </Box>
-              <Divider sx={{ my: 2 }} />
+              <Divider sx={styles.divider} />
             </>
           )}
           
           {/* Search and Add Users Section */}
-          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+          <Typography variant="subtitle2" sx={styles.shareDialogSearchSubtitle}>
             {isShared ? 'Search and Add More Users:' : 'Search and Add Users:'}
           </Typography>
           <TextField
@@ -745,18 +595,18 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                 </InputAdornment>
               ),
             }}
-            sx={{ mb: 2 }}
+            sx={styles.shareDialogSearchField}
             size="small"
           />
           
           {loadingUsers ? (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight={100}>
+            <Box sx={styles.shareDialogLoaderBox}>
               <CircularProgress size={24} />
             </Box>
           ) : (
             <List>
               {users.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 2 }}>
+                <Typography variant="body2" color="text.secondary" sx={styles.shareDialogEmptyText}>
                   {searchQuery.trim() 
                     ? 'No users found matching your search' 
                     : 'Type in the search box above to find users'}

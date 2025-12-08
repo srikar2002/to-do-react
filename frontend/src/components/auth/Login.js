@@ -14,6 +14,7 @@ import {
 import { Brightness4, Brightness7 } from '@mui/icons-material';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
+import { getAuthStyles } from '../../styles/authStyles';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -50,34 +51,24 @@ const Login = () => {
     setLoading(false);
   };
 
+  const styles = getAuthStyles();
+
   return (
     <Container component="main" maxWidth="sm">
-        <Box
-          sx={{
-            marginTop: 8,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            position: 'relative',
-          }}
-        >
+        <Box sx={styles.container}>
           <IconButton
             onClick={toggleTheme}
-            sx={{
-              position: 'absolute',
-              top: 16,
-              right: 16,
-            }}
+            sx={styles.themeToggleButton}
             color="inherit"
           >
             {darkMode ? <Brightness7 /> : <Brightness4 />}
           </IconButton>
-          <Paper elevation={3} sx={{ padding: 4, width: '100%' }}>
+          <Paper elevation={3} sx={styles.paper}>
             <Typography component="h1" variant="h4" align="center" gutterBottom>
               Login
             </Typography>
 
-          <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
+          <Box component="form" onSubmit={handleSubmit} sx={styles.form}>
             <TextField
               margin="normal"
               required
@@ -106,7 +97,7 @@ const Login = () => {
               type="submit"
               fullWidth
               variant="contained"
-              sx={{ mt: 3, mb: 2 }}
+              sx={styles.submitButton}
               disabled={loading}
             >
               {loading ? 'Signing In...' : 'Sign In'}

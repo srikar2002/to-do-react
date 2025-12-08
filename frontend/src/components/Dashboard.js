@@ -68,6 +68,7 @@ import { useTasks } from '../contexts/TaskContext';
 import { useTheme } from '../contexts/ThemeContext';
 import TaskCard from './TaskCard';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import { getDashboardStyles } from '../styles/dashboardStyles';
 import {
   TaskStatus,
   TaskPriority,
@@ -485,7 +486,7 @@ const Dashboard = () => {
       <CardContent
         ref={setNodeRef}
         sx={{
-          ...sx,
+          ...styles.droppableCardContent(sx),
           backgroundColor: isOver ? 'action.hover' : 'transparent',
           transition: 'background-color 0.2s'
         }}
@@ -523,77 +524,41 @@ const Dashboard = () => {
     setWeekStartDate(d.day() === 0 ? d.subtract(6, 'day') : d.subtract(d.day() - 1, 'day'));
   };
 
+  const styles = getDashboardStyles(darkMode);
+
   // Only show full-page loader on initial load (when dates are not set yet)
   if (loading && !dates.today) {
     return (
-      <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
+      <Box sx={styles.loaderBox}>
         <CircularProgress />
       </Box>
     );
   }
 
   return (
-    <Box sx={{ flexGrow: 1 }}>
+    <Box sx={styles.mainBox}>
         <AppBar 
           position="static"
-          sx={{
-            background: darkMode 
-              ? 'linear-gradient(135deg, #0f172a 0%, #1e40af 50%, #0369a1 100%)'
-              : 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 50%, #0891b2 100%)',
-            boxShadow: darkMode 
-              ? '0 4px 24px rgba(15, 23, 42, 0.6)'
-              : '0 4px 24px rgba(30, 58, 138, 0.5)',
-            backdropFilter: 'blur(10px)',
-            borderBottom: darkMode 
-              ? '1px solid rgba(255, 255, 255, 0.05)'
-              : '1px solid rgba(255, 255, 255, 0.1)'
-          }}
+          sx={styles.appBar}
         >
           <Toolbar>
             <Typography 
               variant="h5" 
               component="div" 
-              sx={{ 
-                flexGrow: 1,
-                fontWeight: 700,
-                letterSpacing: 1,
-                background: 'linear-gradient(45deg, #fff 30%, #f0f0f0 90%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text'
-              }}
+              sx={styles.title}
             >
               Taskly
             </Typography>
             <Typography 
               variant="body1" 
-              sx={{ 
-                mr: 2,
-                fontWeight: 500,
-                color: 'rgba(255, 255, 255, 0.95)'
-              }}
+              sx={styles.welcomeText}
             >
               Welcome, <strong>{user?.name}</strong>!
             </Typography>
             {currentTab === 0 && (
               <IconButton 
                 onClick={() => handleOpenDialog()} 
-                sx={{ 
-                  mr: 1,
-                  color: '#1976d2',
-                  backgroundColor: 'rgba(255, 255, 255, 0.9)',
-                  userSelect: 'none',
-                  WebkitUserSelect: 'none',
-                  MozUserSelect: 'none',
-                  msUserSelect: 'none',
-                  '&:hover': {
-                    backgroundColor: '#fff',
-                    color: '#1565c0',
-                    transform: 'scale(1.1)'
-                  },
-                  transition: 'all 0.2s ease-in-out',
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)'
-                }}
+                sx={styles.addButton}
               >
                 <AddIcon />
               </IconButton>
@@ -601,14 +566,7 @@ const Dashboard = () => {
             <IconButton 
               color="inherit" 
               onClick={() => navigate('/profile')}
-              sx={{ 
-                mr: 1,
-                color: 'rgba(255, 255, 255, 0.9)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                  color: '#fff'
-                }
-              }}
+              sx={styles.iconButton}
               title="Profile"
             >
               <PersonIcon />
@@ -616,14 +574,7 @@ const Dashboard = () => {
             <IconButton 
               color="inherit" 
               onClick={toggleTheme} 
-              sx={{ 
-                mr: 1,
-                color: 'rgba(255, 255, 255, 0.9)',
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                  color: '#fff'
-                }
-              }}
+              sx={styles.iconButton}
             >
               {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
             </IconButton>
@@ -631,23 +582,15 @@ const Dashboard = () => {
               color="inherit" 
               onClick={logout} 
               startIcon={<LogoutIcon />}
-              sx={{
-                fontWeight: 500,
-                color: 'rgba(255, 255, 255, 0.9)',
-                textTransform: 'none',
-                '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                  color: '#fff'
-                }
-              }}
+              sx={styles.logoutButton}
             >
               Logout
             </Button>
           </Toolbar>
         </AppBar>
 
-        <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-          <Box sx={{ mb: 3 }}>
+        <Container maxWidth="lg" sx={styles.container}>
+          <Box sx={styles.tabsBox}>
             <Tabs value={currentTab} onChange={handleTabChange} aria-label="task tabs">
               <Tab label="Tasks" />
               <Tab label={`Archived (${archivedTasks.length})`} />
@@ -666,13 +609,11 @@ const Dashboard = () => {
             <Grid container spacing={3}>
               {/* Today */}
               <Grid item xs={12} md={4}>
-                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Card sx={styles.card}>
                   <CardHeader
                     title={getDayLabel(dates.today)}
                     subheader={formatDate(dates.today)}
-                    sx={{ 
-                      backgroundColor: darkMode ? 'rgba(25, 118, 210, 0.2)' : '#e3f2fd'
-                    }}
+                    sx={styles.cardHeader('#e3f2fd')}
                   />
                   <SortableContext
                     items={tasks.today.map(task => task._id)}
@@ -680,11 +621,7 @@ const Dashboard = () => {
                   >
                     <DroppableCardContent
                       date={dates.today}
-                      sx={{
-                        flexGrow: 1,
-                        overflow: 'auto',
-                        minHeight: 200
-                      }}
+                      sx={styles.cardContent}
                     >
                       {tasks.today.map((task) => (
                         <TaskCard
@@ -699,7 +636,7 @@ const Dashboard = () => {
                         />
                       ))}
                       {tasks.today.length === 0 && (
-                        <Typography variant="body2" color="text.secondary" align="center">
+                        <Typography variant="body2" color="text.secondary" sx={styles.emptyTaskText}>
                           No tasks for today
                         </Typography>
                       )}
@@ -710,13 +647,11 @@ const Dashboard = () => {
 
               {/* Tomorrow */}
               <Grid item xs={12} md={4}>
-                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Card sx={styles.card}>
                   <CardHeader
                     title={getDayLabel(dates.tomorrow)}
                     subheader={formatDate(dates.tomorrow)}
-                    sx={{ 
-                      backgroundColor: darkMode ? 'rgba(156, 39, 176, 0.2)' : '#f3e5f5'
-                    }}
+                    sx={styles.cardHeader('#f3e5f5')}
                   />
                   <SortableContext
                     items={tasks.tomorrow.map(task => task._id)}
@@ -724,11 +659,7 @@ const Dashboard = () => {
                   >
                     <DroppableCardContent
                       date={dates.tomorrow}
-                      sx={{
-                        flexGrow: 1,
-                        overflow: 'auto',
-                        minHeight: 200
-                      }}
+                      sx={styles.cardContent}
                     >
                       {tasks.tomorrow.map((task) => (
                         <TaskCard
@@ -743,7 +674,7 @@ const Dashboard = () => {
                         />
                       ))}
                       {tasks.tomorrow.length === 0 && (
-                        <Typography variant="body2" color="text.secondary" align="center">
+                        <Typography variant="body2" color="text.secondary" sx={styles.emptyTaskText}>
                           No tasks for tomorrow
                         </Typography>
                       )}
@@ -754,13 +685,11 @@ const Dashboard = () => {
 
               {/* Day After Tomorrow */}
               <Grid item xs={12} md={4}>
-                <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                <Card sx={styles.card}>
                   <CardHeader
                     title={getDayLabel(dates.dayAfterTomorrow)}
                     subheader={formatDate(dates.dayAfterTomorrow)}
-                    sx={{ 
-                      backgroundColor: darkMode ? 'rgba(76, 175, 80, 0.2)' : '#e8f5e8'
-                    }}
+                    sx={styles.cardHeader('#e8f5e8')}
                   />
                   <SortableContext
                     items={tasks.dayAfterTomorrow.map(task => task._id)}
@@ -768,11 +697,7 @@ const Dashboard = () => {
                   >
                     <DroppableCardContent
                       date={dates.dayAfterTomorrow}
-                      sx={{
-                        flexGrow: 1,
-                        overflow: 'auto',
-                        minHeight: 200
-                      }}
+                      sx={styles.cardContent}
                     >
                       {tasks.dayAfterTomorrow.map((task) => (
                         <TaskCard
@@ -787,7 +712,7 @@ const Dashboard = () => {
                         />
                       ))}
                       {tasks.dayAfterTomorrow.length === 0 && (
-                        <Typography variant="body2" color="text.secondary" align="center">
+                        <Typography variant="body2" color="text.secondary" sx={styles.emptyTaskText}>
                           No tasks for day after tomorrow
                         </Typography>
                       )}
@@ -798,19 +723,19 @@ const Dashboard = () => {
 
               {/* Weekly Task View */}
               <Grid item xs={12}>
-                <Card sx={{ bgcolor: darkMode ? '#1e1e1e' : '#fff', border: darkMode ? '1px solid #444' : '1px solid #e0e0e0', borderRadius: '8px', p: 2 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                    <IconButton onClick={handlePreviousWeek} size="small" sx={{ color: darkMode ? '#fff' : '#000', '&:hover': { bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5' } }}>
+                <Card sx={styles.weeklyViewCard}>
+                  <Box sx={styles.weeklyHeaderBox}>
+                    <IconButton onClick={handlePreviousWeek} size="small" sx={styles.weeklyNavButton}>
                       <ChevronLeftIcon />
                     </IconButton>
-                    <Typography variant="h6" sx={{ fontWeight: 500, color: darkMode ? '#fff' : '#000' }}>
+                    <Typography variant="h6" sx={styles.weeklyTitle}>
                       {weekStartDate.format('MMM DD')} - {weekStartDate.clone().add(6, 'day').format('MMM DD, YYYY')}
                     </Typography>
-                    <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Button onClick={handleTodayWeek} size="small" variant="outlined" sx={{ textTransform: 'none', minWidth: 'auto', px: 1.5, borderColor: darkMode ? '#444' : '#e0e0e0', color: darkMode ? '#fff' : '#000', '&:hover': { borderColor: darkMode ? '#555' : '#ccc', bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5' } }}>
+                    <Box sx={styles.weeklyButtonBox}>
+                      <Button onClick={handleTodayWeek} size="small" variant="outlined" sx={styles.todayButton}>
                         Today
                       </Button>
-                      <IconButton onClick={handleNextWeek} size="small" sx={{ color: darkMode ? '#fff' : '#000', '&:hover': { bgcolor: darkMode ? '#2d2d2d' : '#f5f5f5' } }}>
+                      <IconButton onClick={handleNextWeek} size="small" sx={styles.weeklyNavButton}>
                         <ChevronRightIcon />
                       </IconButton>
                     </Box>
@@ -828,25 +753,21 @@ const Dashboard = () => {
                         : completed.length ? `${completed.length} done`
                         : 'No tasks';
                       return (
-                        <Grid item xs={12} sm={6} md={true} key={dateStr} sx={{ flex: { md: '1 1 0%' } }}>
-                          <Box sx={{
-                            p: 1.5, borderRadius: '8px', textAlign: 'center',
-                            bgcolor: isToday ? (darkMode ? 'rgba(25, 118, 210, 0.15)' : 'rgba(33, 150, 243, 0.1)') : (darkMode ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.02)'),
-                            border: isToday ? (darkMode ? '1px solid #1976d2' : '1px solid #2196f3') : (darkMode ? '1px solid #333' : '1px solid #e0e0e0')
-                          }}>
-                            <Typography variant="caption" sx={{ color: darkMode ? '#aaa' : '#666', textTransform: 'uppercase', fontSize: '0.7rem', fontWeight: 500, display: 'block', mb: 0.5 }}>
+                        <Grid item xs={12} sm={6} md={true} key={dateStr} sx={styles.weeklyGridItem}>
+                          <Box sx={styles.weekDayBox(isToday)}>
+                            <Typography variant="caption" sx={styles.weekDayLabel}>
                               {d.format('ddd')}
                             </Typography>
-                            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1, mb: 1 }}>
-                              <Typography variant="h6" sx={{ color: isToday ? (darkMode ? '#1976d2' : '#2196f3') : (darkMode ? '#fff' : '#000'), fontWeight: isToday ? 700 : 500 }}>
+                            <Box sx={styles.weeklyDayNumberBox}>
+                              <Typography variant="h6" sx={styles.weekDayNumber(isToday)}>
                                 {d.format('D')}
                               </Typography>
-                              <Box sx={{ display: 'flex', gap: 0.5 }}>
-                                {pending.length > 0 && <Box sx={{ width: '8px', height: '8px', borderRadius: '50%', bgcolor: darkMode ? '#1976d2' : '#2196f3' }} />}
-                                {completed.length > 0 && <Box sx={{ width: '8px', height: '8px', borderRadius: '50%', bgcolor: darkMode ? '#4caf50' : '#66bb6a' }} />}
+                              <Box sx={styles.weeklyStatusDotsBox}>
+                                {pending.length > 0 && <Box sx={styles.weeklyStatusDot(true, darkMode)} />}
+                                {completed.length > 0 && <Box sx={styles.weeklyStatusDot(false, darkMode)} />}
                               </Box>
                             </Box>
-                            <Typography variant="caption" sx={{ color: darkMode ? '#888' : '#999', fontSize: '0.7rem' }}>
+                            <Typography variant="caption" sx={styles.weekDaySummary}>
                               {taskSummary}
                             </Typography>
                           </Box>
@@ -859,20 +780,13 @@ const Dashboard = () => {
             </Grid>
             <DragOverlay>
               {activeTask ? (
-                <Card
-                  sx={{
-                    opacity: 0.8,
-                    transform: 'rotate(5deg)',
-                    maxWidth: 300,
-                    boxShadow: 6
-                  }}
-                >
+                <Card sx={styles.dragOverlayCard}>
                   <CardContent>
                     <Typography variant="h6" component="h3">
                       {activeTask.title}
                     </Typography>
                     {activeTask.description && (
-                      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      <Typography variant="body2" color="text.secondary" sx={styles.dragOverlayContent}>
                         {activeTask.description}
                       </Typography>
                     )}
@@ -888,13 +802,11 @@ const Dashboard = () => {
               <CardHeader
                 title="Archived Tasks"
                 subheader={`${archivedTasks.length} archived task${archivedTasks.length !== 1 ? 's' : ''}`}
-                sx={{ 
-                  backgroundColor: darkMode ? 'rgba(255, 152, 0, 0.2)' : '#fff3e0'
-                }}
+                sx={styles.archivedCardHeader}
               />
               <CardContent>
                 {archivedTasks.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" align="center" sx={{ py: 4 }}>
+                  <Typography variant="body2" color="text.secondary" sx={styles.archivedEmptyText}>
                     No archived tasks
                   </Typography>
                 ) : (
@@ -938,7 +850,7 @@ const Dashboard = () => {
                     />
                   }
                   label="Make this a recurring task"
-                  sx={{ mb: 2 }}
+                  sx={styles.dialogFormControlLabel}
                 />
               )}
               <TextField
@@ -958,7 +870,7 @@ const Dashboard = () => {
                 }}
                 error={Boolean(errors.title) || (formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH && formData.title.length > 0)}
                 helperText={errors.title || (formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH && formData.title.length > 0 ? ValidationMessages.TITLE_MAX_REACHED : '')}
-                sx={{ mb: 2 }}
+                sx={styles.dialogTextField}
               />
               <TextField
                 margin="dense"
@@ -975,9 +887,9 @@ const Dashboard = () => {
                 }}
                 error={formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH && formData.description.length > 0}
                 helperText={formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH && formData.description.length > 0 ? ValidationMessages.DESCRIPTION_MAX_REACHED : ''}
-                sx={{ mb: 2 }}
+                sx={styles.dialogTextField}
               />
-              <FormControl fullWidth sx={{ mb: 2 }}>
+              <FormControl fullWidth sx={styles.dialogFormControl}>
                 <InputLabel id="date-select-label">{formData.isRecurring ? 'Start Date' : 'Date'}</InputLabel>
                 <Select
                   labelId="date-select-label"
@@ -992,7 +904,7 @@ const Dashboard = () => {
               </FormControl>
               {formData.isRecurring && !editingTask && (
                 <>
-                  <FormControl fullWidth sx={{ mb: 2 }}>
+                  <FormControl fullWidth sx={styles.dialogFormControl}>
                     <InputLabel id="recurrence-pattern-select-label">Recurrence Pattern</InputLabel>
                     <Select
                       labelId="recurrence-pattern-select-label"
@@ -1022,7 +934,7 @@ const Dashboard = () => {
                       }}
                       error={Boolean(errors.recurrenceInterval)}
                       helperText={errors.recurrenceInterval || 'Number of days between occurrences'}
-                      sx={{ mb: 2 }}
+                      sx={styles.dialogTextField}
                       inputProps={{ min: 1 }}
                     />
                   )}
@@ -1038,11 +950,11 @@ const Dashboard = () => {
                       shrink: true,
                     }}
                     helperText="Leave empty to generate tasks for 90 days"
-                    sx={{ mb: 2 }}
+                    sx={styles.dialogTextField}
                   />
                 </>
               )}
-              <FormControl fullWidth sx={{ mb: 2 }}>
+              <FormControl fullWidth sx={styles.dialogFormControl}>
                 <InputLabel id="priority-select-label">Priority</InputLabel>
                 <Select
                   labelId="priority-select-label"
@@ -1090,10 +1002,10 @@ const Dashboard = () => {
                     </InputAdornment>
                   )
                 }}
-                sx={{ mb: 1 }}
+                sx={styles.dialogTagTextField}
               />
               {formData.tags.length > 0 && (
-                <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                <Box sx={styles.dialogTagsBox}>
                   {formData.tags.map((tag, index) => (
                     <Chip
                       key={index}
@@ -1134,7 +1046,7 @@ const Dashboard = () => {
           onClose={handleCloseDeleteDialog} 
           maxWidth="sm" 
           fullWidth
-          PaperProps={{ sx: { minWidth: 520, minHeight: 220 } }}
+          PaperProps={{ sx: styles.deleteDialogPaper }}
         >
           <DialogTitle>Delete Task</DialogTitle>
           <DialogContent>
@@ -1142,7 +1054,7 @@ const Dashboard = () => {
               Are you sure you want to delete "{taskToDelete?.title}"?
             </Typography>
             {taskToDelete?.status === TaskStatus.PENDING && (
-              <Typography variant="body2" color="error" sx={{ mt: 1 }}>
+              <Typography variant="body2" color="error" sx={styles.deleteDialogWarningText}>
                 This task is still Pending. Do you still want to delete it?
               </Typography>
             )}
