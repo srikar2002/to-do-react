@@ -1,11 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Container, Typography, Box, Button, FormControl, InputLabel, Select, MenuItem, Card, CardContent, Alert, CircularProgress, Avatar, Switch, FormControlLabel } from '@mui/material';
 import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon, Notifications as NotificationsIcon, CalendarToday as CalendarIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getProfileStyles } from '../styles/profileStyles';
-import axios from 'axios';
+import { 
+  checkCalendarStatus as checkCalendarStatusService,
+  connectCalendar,
+  disconnectCalendar,
+  updateTimezone,
+  updateNotificationPreference
+} from '../services/profileService';
 
 const TIMEZONES = [
   { value: 'Asia/Kolkata', label: 'India', offset: 'UTC+5:30' },
@@ -41,6 +47,18 @@ const Profile = () => {
   }, [user]);
 
   // Check Google Calendar connection status
+  const checkCalendarStatus = useCallback(async () => {
+    if (!user?.token) {
+      setCheckingCalendar(false);
+      return;
+    }
+    
+    setCheckingCalendar(true);
+    const result = await checkCalendarStatusService(user.token);
+    setCalendarConnected(result.connected || false);
+    setCheckingCalendar(false);
+  }, [user?.token]);
+
   useEffect(() => {
     checkCalendarStatus();
     
@@ -58,24 +76,7 @@ const Profile = () => {
       // Remove query params from URL
       navigate('/profile', { replace: true });
     }
-  }, [searchParams, navigate]);
-
-  const checkCalendarStatus = async () => {
-    if (!user?.token) return;
-    
-    setCheckingCalendar(true);
-    try {
-      const response = await axios.get('/api/auth/google-calendar/status', {
-        headers: { 'Authorization': `Bearer ${user.token}` }
-      });
-      setCalendarConnected(response.data.connected);
-    } catch (error) {
-      console.error('Error checking calendar status:', error);
-      setCalendarConnected(false);
-    } finally {
-      setCheckingCalendar(false);
-    }
-  };
+  }, [searchParams, navigate, checkCalendarStatus]);
 
   const handleConnectCalendar = async () => {
     if (!user?.token) {
@@ -85,15 +86,14 @@ const Profile = () => {
     
     setCalendarLoading(true);
     setError('');
-    try {
-      const response = await axios.get('/api/auth/google-calendar/authorize', {
-        headers: { 'Authorization': `Bearer ${user.token}` }
-      });
+    
+    const result = await connectCalendar(user.token);
+    
+    if (result.success && result.authorizationUrl) {
       // Redirect to Google authorization page
-      window.location.href = response.data.authorizationUrl;
-    } catch (error) {
-      console.error('Error connecting calendar:', error);
-      setError(error.response?.data?.message || 'Failed to connect Google Calendar');
+      window.location.href = result.authorizationUrl;
+    } else {
+      setError(result.message || 'Failed to connect Google Calendar');
       setCalendarLoading(false);
     }
   };
@@ -106,18 +106,17 @@ const Profile = () => {
     
     setCalendarLoading(true);
     setError('');
-    try {
-      await axios.delete('/api/auth/google-calendar/disconnect', {
-        headers: { 'Authorization': `Bearer ${user.token}` }
-      });
+    
+    const result = await disconnectCalendar(user.token);
+    
+    if (result.success) {
       setCalendarConnected(false);
       setSuccess('Google Calendar disconnected successfully');
-    } catch (error) {
-      console.error('Error disconnecting calendar:', error);
-      setError(error.response?.data?.message || 'Failed to disconnect Google Calendar');
-    } finally {
-      setCalendarLoading(false);
+    } else {
+      setError(result.message || 'Failed to disconnect Google Calendar');
     }
+    
+    setCalendarLoading(false);
   };
 
   const handleTimezoneChange = async (e) => {
@@ -127,24 +126,23 @@ const Profile = () => {
     setSuccess('');
     setLoading(true);
 
-    try {
-      const response = await axios.patch('/api/auth/preferences/timezone', { timezone: tz });
-      
+    const result = await updateTimezone(tz, user?.token);
+    
+    if (result.success && result.user) {
       // Update user in context and localStorage (preserve token)
-      const updatedUser = { ...response.data.user, token: user?.token };
+      const updatedUser = { ...result.user, token: user?.token };
       setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('user', JSON.stringify(result.user));
       localStorage.setItem('userTimezone', tz);
       
       setSuccess('Timezone preference saved successfully!');
-    } catch (error) {
-      console.error('Error updating timezone:', error);
-      setError(error.response?.data?.message || 'Failed to save timezone preference');
+    } else {
+      setError(result.message || 'Failed to save timezone preference');
       // Revert to previous timezone on error
       setTimezone(user?.timezone || 'Asia/Kolkata');
-    } finally {
-      setLoading(false);
     }
+    
+    setLoading(false);
   };
 
   const handleNotificationToggle = async (e) => {
@@ -154,25 +152,22 @@ const Profile = () => {
     setSuccess('');
     setNotificationLoading(true);
 
-    try {
-      const response = await axios.patch('/api/auth/preferences/notifications', { 
-        emailNotificationsEnabled: enabled 
-      });
-      
+    const result = await updateNotificationPreference(enabled, user?.token);
+    
+    if (result.success && result.user) {
       // Update user in context and localStorage (preserve token)
-      const updatedUser = { ...response.data.user, token: user?.token };
+      const updatedUser = { ...result.user, token: user?.token };
       setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(response.data.user));
+      localStorage.setItem('user', JSON.stringify(result.user));
       
       setSuccess(`Email notifications ${enabled ? 'enabled' : 'disabled'} successfully!`);
-    } catch (error) {
-      console.error('Error updating notification preference:', error);
-      setError(error.response?.data?.message || 'Failed to update notification preference');
+    } else {
+      setError(result.message || 'Failed to update notification preference');
       // Revert to previous state on error
       setEmailNotificationsEnabled(user?.emailNotificationsEnabled || false);
-    } finally {
-      setNotificationLoading(false);
     }
+    
+    setNotificationLoading(false);
   };
 
   const styles = getProfileStyles(darkMode);
