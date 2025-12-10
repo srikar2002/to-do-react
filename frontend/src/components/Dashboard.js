@@ -80,6 +80,26 @@ import {
   ErrorMessages,
   ValidationMessages
 } from '../constants/enums';
+import {
+  convertDateOptionToDate,
+  convertTaskDateToOption,
+  formatDate,
+  getDayLabel,
+  validateTaskForm,
+  prepareTaskData,
+  initializeWeekStartDate,
+  getWeekDates,
+  navigateToPreviousWeek,
+  navigateToNextWeek,
+  navigateToCurrentWeek,
+  getTasksForDate,
+  getTaskSummary,
+  formatWeekRange,
+  canEditTask,
+  canDragTask,
+  getDateKey,
+  isValidTargetDate
+} from '../services/dashboardService';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -111,13 +131,7 @@ const Dashboard = () => {
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
   const [activeTask, setActiveTask] = useState(null);
-  const [weekStartDate, setWeekStartDate] = useState(() => {
-    // Start week from Monday
-    const today = dayjs();
-    const dayOfWeek = today.day();
-    const monday = dayOfWeek === 0 ? today.subtract(6, 'day') : today.subtract(dayOfWeek - 1, 'day');
-    return monday;
-  });
+  const [weekStartDate, setWeekStartDate] = useState(() => initializeWeekStartDate());
 
   // Configure sensors for drag and drop
   const sensors = useSensors(
@@ -133,30 +147,14 @@ const Dashboard = () => {
 
   const handleOpenDialog = (task = null, isRecurring = false) => {
     if (task) {
-      // Prevent editing archived tasks
-      if (task.archived) {
-        enqueueSnackbar(ErrorMessages.CANNOT_EDIT_ARCHIVED, { variant: 'warning' });
-        return;
-      }
-      // Prevent editing completed tasks
-      if (task.status === TaskStatus.COMPLETED) {
-        enqueueSnackbar(ErrorMessages.CANNOT_EDIT_COMPLETED, { variant: 'warning' });
+      const editCheck = canEditTask(task);
+      if (!editCheck.canEdit) {
+        enqueueSnackbar(editCheck.reason, { variant: 'warning' });
         return;
       }
       
       setEditingTask(task);
-      // Convert task date to our dropdown format
-      const taskDate = dayjs(task.date);
-      const today = dayjs();
-      const tomorrow = dayjs().add(1, 'day');
-      const dayAfterTomorrow = dayjs().add(2, 'day');
-      
-      let dateOption = DateOption.TODAY;
-      if (taskDate.isSame(tomorrow, 'day')) {
-        dateOption = DateOption.TOMORROW;
-      } else if (taskDate.isSame(dayAfterTomorrow, 'day')) {
-        dateOption = DateOption.DAY_AFTER_TOMORROW;
-      }
+      const dateOption = convertTaskDateToOption(task.date);
       
       setFormData({
         title: task.title,
@@ -212,56 +210,18 @@ const Dashboard = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Custom validations
-    const nextErrors = { title: '', recurrenceInterval: '' };
-    const isTitleEmpty = formData.title.trim().length === 0;
-    const titleTooLong = formData.title.trim().length > ValidationLimits.TITLE_MAX_LENGTH;
-    const descriptionTooLong = formData.description.trim().length > ValidationLimits.DESCRIPTION_MAX_LENGTH;
-    const invalidInterval = formData.isRecurring && formData.recurrencePattern === 'custom' && 
-      (!formData.recurrenceInterval || formData.recurrenceInterval < 1);
-
-    if (isTitleEmpty) {
-      nextErrors.title = ValidationMessages.TITLE_REQUIRED;
-    } else if (titleTooLong) {
-      nextErrors.title = ValidationMessages.TITLE_MAX_LENGTH;
-    }
-
-    if (invalidInterval) {
-      nextErrors.recurrenceInterval = 'Interval must be at least 1 day';
-    }
-
-    setErrors(nextErrors);
-    if (nextErrors.title || nextErrors.recurrenceInterval || descriptionTooLong) {
+    // Validate form data
+    const validation = validateTaskForm(formData);
+    setErrors(validation.errors);
+    
+    if (!validation.isValid) {
       enqueueSnackbar(ErrorMessages.VALIDATION_ERRORS, { variant: 'error' });
       return;
-    }
-    
-    // Convert dropdown selection to actual date
-    let actualDate;
-    switch (formData.date) {
-      case DateOption.TODAY:
-        actualDate = dayjs().format('YYYY-MM-DD');
-        break;
-      case DateOption.TOMORROW:
-        actualDate = dayjs().add(1, 'day').format('YYYY-MM-DD');
-        break;
-      case DateOption.DAY_AFTER_TOMORROW:
-        actualDate = dayjs().add(2, 'day').format('YYYY-MM-DD');
-        break;
-      default:
-        actualDate = dayjs().format('YYYY-MM-DD');
     }
 
     if (editingTask) {
       // Update existing task (can't be recurring when editing)
-      const taskData = {
-        title: formData.title,
-        description: formData.description,
-        date: actualDate,
-        status: formData.status,
-        priority: formData.priority,
-        tags: formData.tags
-      };
+      const taskData = prepareTaskData(formData, false);
       
       const result = await updateTask(editingTask._id, taskData);
       if (result.success) {
@@ -272,17 +232,7 @@ const Dashboard = () => {
       }
     } else if (formData.isRecurring) {
       // Create recurring task
-      const recurringTaskData = {
-        title: formData.title,
-        description: formData.description,
-        startDate: actualDate,
-        status: formData.status,
-        priority: formData.priority,
-        tags: formData.tags,
-        recurrencePattern: formData.recurrencePattern,
-        recurrenceInterval: formData.recurrenceInterval,
-        recurrenceEndDate: formData.recurrenceEndDate || null
-      };
+      const recurringTaskData = prepareTaskData(formData, true);
 
       const result = await createRecurringTask(recurringTaskData);
       if (result.success) {
@@ -293,14 +243,7 @@ const Dashboard = () => {
       }
     } else {
       // Create regular task
-      const taskData = {
-        title: formData.title,
-        description: formData.description,
-        date: actualDate,
-        status: formData.status,
-        priority: formData.priority,
-        tags: formData.tags,
-      };
+      const taskData = prepareTaskData(formData, false);
 
       const result = await createTask(taskData);
       if (result.success) {
@@ -411,7 +354,7 @@ const Dashboard = () => {
     if (!task) return;
 
     // Prevent dragging completed or archived tasks
-    if (task.status === TaskStatus.COMPLETED || task.archived) {
+    if (!canDragTask(task)) {
       return;
     }
 
@@ -419,8 +362,9 @@ const Dashboard = () => {
 
     // If dropped in the same column, handle reordering
     if (sourceDate === targetDate) {
-      const dateKey = sourceDate === dates.today ? 'today' : 
-                     sourceDate === dates.tomorrow ? 'tomorrow' : 'dayAfterTomorrow';
+      const dateKey = getDateKey(sourceDate, dates);
+      if (!dateKey) return;
+      
       const taskList = tasks[dateKey];
       const oldIndex = taskList.findIndex(t => t._id === taskId);
       
@@ -450,11 +394,11 @@ const Dashboard = () => {
     // If dropped in a different column, update the date and order
     if (sourceDate !== targetDate) {
       // Validate that targetDate is one of our three dates
-      const validDates = [dates.today, dates.tomorrow, dates.dayAfterTomorrow];
-      if (validDates.includes(targetDate)) {
+      if (isValidTargetDate(targetDate, dates)) {
         // Get the target column's task list to determine the new order
-        const dateKey = targetDate === dates.today ? 'today' : 
-                       targetDate === dates.tomorrow ? 'tomorrow' : 'dayAfterTomorrow';
+        const dateKey = getDateKey(targetDate, dates);
+        if (!dateKey) return;
+        
         const targetTaskList = tasks[dateKey];
         // Set order to append at the end of the target column
         const newOrder = targetTaskList.length;
@@ -498,31 +442,14 @@ const Dashboard = () => {
   };
 
 
-  const formatDate = (dateString) => {
-    return dayjs(dateString).format('MMM DD, YYYY');
-  };
-
-  const getDayLabel = (dateString) => {
-    const today = dayjs().format('YYYY-MM-DD');
-    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-    
-    if (dateString === today) return DayLabels.TODAY;
-    if (dateString === tomorrow) return DayLabels.TOMORROW;
-    return DayLabels.DAY_AFTER_TOMORROW;
-  };
-
   // Weekly view helpers
   const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
-  const weekDates = Array.from({ length: 7 }, (_, i) => weekStartDate.clone().add(i, 'day').format('YYYY-MM-DD'));
+  const weekDates = getWeekDates(weekStartDate);
   const today = dayjs().format('YYYY-MM-DD');
-  const getTasksForDate = (dateStr) => allTasks.filter(t => t.date === dateStr && !t.archived);
   
-  const handlePreviousWeek = () => setWeekStartDate(prev => prev.clone().subtract(7, 'day'));
-  const handleNextWeek = () => setWeekStartDate(prev => prev.clone().add(7, 'day'));
-  const handleTodayWeek = () => {
-    const d = dayjs();
-    setWeekStartDate(d.day() === 0 ? d.subtract(6, 'day') : d.subtract(d.day() - 1, 'day'));
-  };
+  const handlePreviousWeek = () => setWeekStartDate(prev => navigateToPreviousWeek(prev));
+  const handleNextWeek = () => setWeekStartDate(prev => navigateToNextWeek(prev));
+  const handleTodayWeek = () => setWeekStartDate(navigateToCurrentWeek());
 
   const styles = getDashboardStyles(darkMode);
 
@@ -729,7 +656,7 @@ const Dashboard = () => {
                       <ChevronLeftIcon />
                     </IconButton>
                     <Typography variant="h6" sx={styles.weeklyTitle}>
-                      {weekStartDate.format('MMM DD')} - {weekStartDate.clone().add(6, 'day').format('MMM DD, YYYY')}
+                      {formatWeekRange(weekStartDate)}
                     </Typography>
                     <Box sx={styles.weeklyButtonBox}>
                       <Button onClick={handleTodayWeek} size="small" variant="outlined" sx={styles.todayButton}>
@@ -742,16 +669,12 @@ const Dashboard = () => {
                   </Box>
                   <Grid container spacing={1}>
                     {weekDates.map(dateStr => {
-                      const dateTasks = getTasksForDate(dateStr);
+                      const dateTasks = getTasksForDate(allTasks, dateStr);
                       const pending = dateTasks.filter(t => t.status === TaskStatus.PENDING);
                       const completed = dateTasks.filter(t => t.status === TaskStatus.COMPLETED);
                       const isToday = dateStr === today;
                       const d = dayjs(dateStr);
-                      const taskSummary = pending.length && completed.length 
-                        ? `${pending.length} pending • ${completed.length} done`
-                        : pending.length ? `${pending.length} pending`
-                        : completed.length ? `${completed.length} done`
-                        : 'No tasks';
+                      const taskSummary = getTaskSummary(dateTasks);
                       return (
                         <Grid item xs={12} sm={6} md={true} key={dateStr} sx={styles.weeklyGridItem}>
                           <Box sx={styles.weekDayBox(isToday)}>
