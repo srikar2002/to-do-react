@@ -98,7 +98,11 @@ import {
   canEditTask,
   canDragTask,
   getDateKey,
-  isValidTargetDate
+  isValidTargetDate,
+  handleTaskDelete,
+  handleTaskArchive,
+  handleTaskRestore,
+  handleTaskToggleStatus
 } from '../services/dashboardService';
 
 const Dashboard = () => {
@@ -267,41 +271,20 @@ const Dashboard = () => {
 
   const handleConfirmDelete = async () => {
     if (!taskToDelete) return;
-    const result = await deleteTask(taskToDelete._id);
-    if (result?.success) {
-      enqueueSnackbar(SuccessMessages.TASK_DELETED, { variant: 'error' });
-    } else {
-      enqueueSnackbar(result?.message || ErrorMessages.TASK_DELETE_FAILED, { variant: 'error' });
-    }
+    await handleTaskDelete(taskToDelete._id, deleteTask, enqueueSnackbar);
     handleCloseDeleteDialog();
   };
 
   const handleToggleStatus = async (taskId, currentStatus) => {
-    await toggleTaskStatus(taskId, currentStatus);
+    await handleTaskToggleStatus(taskId, currentStatus, toggleTaskStatus);
   };
 
   const handleArchive = async (task) => {
-    const result = await archiveTask(task._id);
-    if (result.success) {
-      enqueueSnackbar(SuccessMessages.TASK_ARCHIVED, { variant: 'warning' });
-      // Refresh archived tasks to update the count
-      await fetchArchivedTasks();
-    } else {
-      enqueueSnackbar(result.message || ErrorMessages.TASK_ARCHIVE_FAILED, { variant: 'error' });
-    }
+    await handleTaskArchive(task._id, archiveTask, fetchArchivedTasks, enqueueSnackbar);
   };
 
   const handleRestore = async (task) => {
-    const result = await restoreTask(task._id);
-    if (result.success) {
-      enqueueSnackbar(SuccessMessages.TASK_RESTORED, { variant: 'success' });
-      // If we're on the archive tab, refresh archived tasks
-      if (currentTab === 1) {
-        await fetchArchivedTasks();
-      }
-    } else {
-      enqueueSnackbar(result.message || ErrorMessages.TASK_RESTORE_FAILED, { variant: 'error' });
-    }
+    await handleTaskRestore(task._id, restoreTask, fetchArchivedTasks, enqueueSnackbar, currentTab);
   };
 
   const handleTabChange = (event, newValue) => {

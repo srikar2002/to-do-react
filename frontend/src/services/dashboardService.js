@@ -4,7 +4,9 @@ import {
   TaskStatus,
   ValidationLimits,
   ValidationMessages,
-  DayLabels
+  DayLabels,
+  SuccessMessages,
+  ErrorMessages
 } from '../constants/enums';
 
 /**
@@ -276,5 +278,76 @@ export const getDateKey = (date, dates) => {
 export const isValidTargetDate = (targetDate, dates) => {
   const validDates = [dates.today, dates.tomorrow, dates.dayAfterTomorrow];
   return validDates.includes(targetDate);
+};
+
+/**
+ * Handle task delete operation with notification
+ * @param {string} taskId - Task ID to delete
+ * @param {function} deleteTask - Delete task function from context
+ * @param {function} enqueueSnackbar - Snackbar notification function
+ * @returns {Promise<object>} - Result object with success status
+ */
+export const handleTaskDelete = async (taskId, deleteTask, enqueueSnackbar) => {
+  const result = await deleteTask(taskId);
+  if (result?.success) {
+    enqueueSnackbar(SuccessMessages.TASK_DELETED, { variant: 'error' });
+  } else {
+    enqueueSnackbar(result?.message || ErrorMessages.TASK_DELETE_FAILED, { variant: 'error' });
+  }
+  return result;
+};
+
+/**
+ * Handle task archive operation with notification
+ * @param {string} taskId - Task ID to archive
+ * @param {function} archiveTask - Archive task function from context
+ * @param {function} fetchArchivedTasks - Fetch archived tasks function from context
+ * @param {function} enqueueSnackbar - Snackbar notification function
+ * @returns {Promise<object>} - Result object with success status
+ */
+export const handleTaskArchive = async (taskId, archiveTask, fetchArchivedTasks, enqueueSnackbar) => {
+  const result = await archiveTask(taskId);
+  if (result.success) {
+    enqueueSnackbar(SuccessMessages.TASK_ARCHIVED, { variant: 'warning' });
+    // Refresh archived tasks to update the count
+    await fetchArchivedTasks();
+  } else {
+    enqueueSnackbar(result.message || ErrorMessages.TASK_ARCHIVE_FAILED, { variant: 'error' });
+  }
+  return result;
+};
+
+/**
+ * Handle task restore operation with notification
+ * @param {string} taskId - Task ID to restore
+ * @param {function} restoreTask - Restore task function from context
+ * @param {function} fetchArchivedTasks - Fetch archived tasks function from context
+ * @param {function} enqueueSnackbar - Snackbar notification function
+ * @param {number} currentTab - Current tab index (to check if on archive tab)
+ * @returns {Promise<object>} - Result object with success status
+ */
+export const handleTaskRestore = async (taskId, restoreTask, fetchArchivedTasks, enqueueSnackbar, currentTab) => {
+  const result = await restoreTask(taskId);
+  if (result.success) {
+    enqueueSnackbar(SuccessMessages.TASK_RESTORED, { variant: 'success' });
+    // If we're on the archive tab, refresh archived tasks
+    if (currentTab === 1) {
+      await fetchArchivedTasks();
+    }
+  } else {
+    enqueueSnackbar(result.message || ErrorMessages.TASK_RESTORE_FAILED, { variant: 'error' });
+  }
+  return result;
+};
+
+/**
+ * Handle task status toggle
+ * @param {string} taskId - Task ID to toggle
+ * @param {string} currentStatus - Current task status
+ * @param {function} toggleTaskStatus - Toggle task status function from context
+ * @returns {Promise<void>}
+ */
+export const handleTaskToggleStatus = async (taskId, currentStatus, toggleTaskStatus) => {
+  await toggleTaskStatus(taskId, currentStatus);
 };
 
