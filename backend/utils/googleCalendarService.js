@@ -7,10 +7,10 @@ const url = require('url');
  * Handles OAuth2 authentication and calendar event creation
  */
 
-// Google OAuth2 endpoints
-const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
-const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const GOOGLE_CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
+// Google OAuth2 endpoints (configurable via environment variables)
+const GOOGLE_AUTH_URL = process.env.GOOGLE_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth';
+const GOOGLE_TOKEN_URL = process.env.GOOGLE_TOKEN_URL || 'https://oauth2.googleapis.com/token';
+const GOOGLE_CALENDAR_API = process.env.GOOGLE_CALENDAR_API || 'https://www.googleapis.com/calendar/v3';
 
 /**
  * Generate Google OAuth2 authorization URL
@@ -149,15 +149,23 @@ const createCalendarEvent = async (accessToken, eventData) => {
 
 /**
  * Create calendar event from task data
+ * Uses the task creation time for the event start time
  */
-const createEventFromTask = async (accessToken, task) => {
-  const taskDate = new Date(task.date + 'T09:00:00');
+const createEventFromTask = async (accessToken, task, userTimezone = 'UTC') => {
+  const creationTime = task.createdAt ? new Date(task.createdAt) : new Date();
+  const formatTime = (d) => `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}:${d.getSeconds().toString().padStart(2, '0')}`;
+  
+  const startDateTime = `${task.date}T${formatTime(creationTime)}`;
+  const startDate = new Date(startDateTime);
+  const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
+  const endDateTime = `${endDate.getFullYear()}-${(endDate.getMonth() + 1).toString().padStart(2, '0')}-${endDate.getDate().toString().padStart(2, '0')}T${formatTime(endDate)}`;
+  
   return createCalendarEvent(accessToken, {
     summary: task.title,
     description: task.description || `Task: ${task.title}`,
-    start: taskDate.toISOString(),
-    end: new Date(taskDate.getTime() + 60 * 60 * 1000).toISOString(),
-    timeZone: 'UTC'
+    start: startDateTime,
+    end: endDateTime,
+    timeZone: userTimezone
   });
 };
 

@@ -21,5 +21,11 @@ GOOGLE_CLIENT_ID=your_google_client_id_here
 GOOGLE_CLIENT_SECRET=your_google_client_secret_here
 GOOGLE_REDIRECT_URI=http://localhost:5000/api/auth/google-calendar/callback
 
+// Google API Endpoints (optional - defaults to standard Google endpoints)
+// Only override if using custom endpoints or testing
+GOOGLE_AUTH_URL=https://accounts.google.com/o/oauth2/v2/auth
+GOOGLE_TOKEN_URL=https://oauth2.googleapis.com/token
+GOOGLE_CALENDAR_API=https://www.googleapis.com/calendar/v3
+
 // Frontend URL (for OAuth redirects)
 FRONTEND_URL=http://localhost:3000

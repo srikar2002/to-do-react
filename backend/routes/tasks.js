@@ -39,7 +39,10 @@ const createCalendarEventForTask = async (user, task) => {
     const { token: accessToken, refreshed } = await getValidAccessToken(user, clientId, clientSecret);
     if (refreshed) await user.save();
     
-    createEventFromTask(accessToken, task)
+    // Use user's timezone or default to UTC
+    const userTimezone = user.timezone || 'UTC';
+    
+    createEventFromTask(accessToken, task, userTimezone)
       .then(event => console.log('Google Calendar event created:', event.id))
       .catch(err => console.error('Failed to create Google Calendar event:', err));
   } catch (error) {
