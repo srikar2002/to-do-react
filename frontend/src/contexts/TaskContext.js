@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useOptimistic } from 'react';
 import axios from 'axios';
 import dayjs from 'dayjs';
 import { useAuth } from './AuthContext';
@@ -31,6 +31,27 @@ export const TaskProvider = ({ children }) => {
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [loading, setLoading] = useState(false);
   
+  // React 19: useOptimistic for immediate UI feedback when toggling task status
+  // This provides instant visual feedback while the API call is in progress
+  const [optimisticTasks, setOptimisticTaskStatus] = useOptimistic(
+    tasks,
+    (currentTasks, { taskId, newStatus }) => {
+      // Optimistically update the task status across all date buckets
+      const updateTaskInArray = (taskArray) =>
+        taskArray.map(task => 
+          task._id === taskId 
+            ? { ...task, status: newStatus }
+            : task
+        );
+
+      return {
+        today: updateTaskInArray(currentTasks.today),
+        tomorrow: updateTaskInArray(currentTasks.tomorrow),
+        dayAfterTomorrow: updateTaskInArray(currentTasks.dayAfterTomorrow)
+      };
+    }
+  );
+  
   // Keep a ref to the latest fetchTasks function to avoid stale closures
   const fetchTasksRef = useRef(null);
 
@@ -44,12 +65,14 @@ export const TaskProvider = ({ children }) => {
       const response = await axios.get('/api/tasks');
       const { tasks: tasksData, dates: datesData } = response.data;
       
-      setTasks({
+      const fetchedTasks = {
         today: tasksData[datesData.today] || [],
         tomorrow: tasksData[datesData.tomorrow] || [],
         dayAfterTomorrow: tasksData[datesData.dayAfterTomorrow] || []
-      });
+      };
+      setTasks(fetchedTasks);
       setDates(datesData);
+      // Note: useOptimistic will automatically sync with the new tasks state
     } catch (error) {
       console.error('Error fetching tasks:', error);
       // Clear tasks on error to avoid showing stale data
@@ -143,7 +166,25 @@ export const TaskProvider = ({ children }) => {
 
   const toggleTaskStatus = async (taskId, currentStatus) => {
     const newStatus = currentStatus === TaskStatus.PENDING ? TaskStatus.COMPLETED : TaskStatus.PENDING;
-    return await updateTask(taskId, { status: newStatus });
+    
+    // React 19: Optimistically update the UI immediately
+    setOptimisticTaskStatus({ taskId, newStatus });
+    
+    try {
+      const result = await updateTask(taskId, { status: newStatus });
+      // If the update fails, fetchTasks will revert the optimistic update
+      if (!result.success) {
+        await fetchTasks();
+      }
+      return result;
+    } catch (error) {
+      // On error, revert by fetching the latest tasks
+      await fetchTasks();
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Failed to toggle task status' 
+      };
+    }
   };
 
   const archiveTask = async (taskId) => {
@@ -314,7 +355,7 @@ export const TaskProvider = ({ children }) => {
   }, [user, fetchTasks]); // Trigger when user object or fetchTasks changes
 
   const value = {
-    tasks,
+    tasks: optimisticTasks, // Use optimistic tasks for immediate UI updates
     dates,
     archivedTasks,
     loading,
