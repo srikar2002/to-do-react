@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useDeferredValue } from 'react';
 import { Box, Card, CardContent, Typography, Grid, useTheme } from '@mui/material';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js';
@@ -11,12 +11,15 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 const AnalyticsDashboard = () => {
   const { tasks } = useTasks();
+  // Use deferred value for tasks to keep UI responsive during frequent updates
+  // Chart rendering can be deferred while maintaining smooth user experience
+  const deferredTasks = useDeferredValue(tasks);
   const { darkMode } = useThemeContext();
   const theme = useTheme();
   const styles = getAnalyticsStyles(darkMode, theme);
 
   const stats = useMemo(() => {
-    const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
+    const allTasks = [...deferredTasks.today, ...deferredTasks.tomorrow, ...deferredTasks.dayAfterTomorrow];
     return {
       byPriority: [TaskPriority.HIGH, TaskPriority.MEDIUM, TaskPriority.LOW].map(p => ({
         name: p,
@@ -24,16 +27,16 @@ const AnalyticsDashboard = () => {
         pending: allTasks.filter(t => t.priority === p && t.status === TaskStatus.PENDING).length
       })),
       byDate: [
-        { name: 'Today', tasks: tasks.today },
-        { name: 'Tomorrow', tasks: tasks.tomorrow },
-        { name: 'Day After', tasks: tasks.dayAfterTomorrow }
+        { name: 'Today', tasks: deferredTasks.today },
+        { name: 'Tomorrow', tasks: deferredTasks.tomorrow },
+        { name: 'Day After', tasks: deferredTasks.dayAfterTomorrow }
       ].map(item => ({
         name: item.name,
         completed: item.tasks.filter(t => t.status === TaskStatus.COMPLETED).length,
         pending: item.tasks.filter(t => t.status === TaskStatus.PENDING).length
       }))
     };
-  }, [tasks]);
+  }, [deferredTasks]);
 
   const getChartData = (data) => ({
     labels: data.map(item => item.name),
