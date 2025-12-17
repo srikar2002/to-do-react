@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { useAuth } from './AuthContext';
 import { TaskStatus } from '../constants/enums';
 import { useSocket } from '../hooks/useSocket';
+import { updateTask as updateTaskService, deleteTask as deleteTaskService } from '../services/taskService';
 
 const TaskContext = createContext();
 
@@ -131,37 +132,27 @@ export const TaskProvider = ({ children }) => {
 
 
   const updateTask = async (taskId, taskData) => {
-    if (!user) {
+    if (!user || !user.token) {
       return { success: false, message: 'User not authenticated' };
     }
     
-    try {
-      const response = await axios.put(`/api/tasks/${taskId}`, taskData);
+    const result = await updateTaskService(taskId, taskData, user.token);
+    if (result.success) {
       await fetchTasks(); // Refresh tasks
-      return { success: true, task: response.data.task };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to update task' 
-      };
     }
+    return result;
   };
 
   const deleteTask = async (taskId) => {
-    if (!user) {
+    if (!user || !user.token) {
       return { success: false, message: 'User not authenticated' };
     }
     
-    try {
-      await axios.delete(`/api/tasks/${taskId}`);
+    const result = await deleteTaskService(taskId, user.token);
+    if (result.success) {
       await fetchTasks(); // Refresh tasks
-      return { success: true };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to delete task' 
-      };
     }
+    return result;
   };
 
   const toggleTaskStatus = async (taskId, currentStatus) => {
