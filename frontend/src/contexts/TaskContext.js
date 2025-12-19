@@ -4,7 +4,15 @@ import dayjs from 'dayjs';
 import { useAuth } from './AuthContext';
 import { TaskStatus } from '../constants/enums';
 import { useSocket } from '../hooks/useSocket';
-import { updateTask as updateTaskService, deleteTask as deleteTaskService } from '../services/taskService';
+import { 
+  fetchTasks as fetchTasksService,
+  createTask as createTaskService,
+  createRecurringTask as createRecurringTaskService,
+  archiveTask as archiveTaskService,
+  fetchArchivedTasks as fetchArchivedTasksService,
+  updateTask as updateTaskService, 
+  deleteTask as deleteTaskService 
+} from '../services/taskService';
 
 const TaskContext = createContext();
 
@@ -63,17 +71,24 @@ export const TaskProvider = ({ children }) => {
     
     setLoading(true);
     try {
-      const response = await axios.get('/api/tasks');
-      const { tasks: tasksData, dates: datesData } = response.data;
-      
-      const fetchedTasks = {
-        today: tasksData[datesData.today] || [],
-        tomorrow: tasksData[datesData.tomorrow] || [],
-        dayAfterTomorrow: tasksData[datesData.dayAfterTomorrow] || []
-      };
-      setTasks(fetchedTasks);
-      setDates(datesData);
-      // Note: useOptimistic will automatically sync with the new tasks state
+      const result = await fetchTasksService(user.token);
+      if (result.success && result.tasks && result.dates) {
+        const fetchedTasks = {
+          today: result.tasks[result.dates.today] || [],
+          tomorrow: result.tasks[result.dates.tomorrow] || [],
+          dayAfterTomorrow: result.tasks[result.dates.dayAfterTomorrow] || []
+        };
+        setTasks(fetchedTasks);
+        setDates(result.dates);
+        // Note: useOptimistic will automatically sync with the new tasks state
+      } else {
+        // Clear tasks on error to avoid showing stale data
+        setTasks({
+          today: [],
+          tomorrow: [],
+          dayAfterTomorrow: []
+        });
+      }
     } catch (error) {
       console.error('Error fetching tasks:', error);
       // Clear tasks on error to avoid showing stale data
@@ -93,41 +108,27 @@ export const TaskProvider = ({ children }) => {
   }, [fetchTasks]);
 
   const createTask = async (taskData) => {
-    if (!user) {
+    if (!user || !user.token) {
       return { success: false, message: 'User not authenticated' };
     }
     
-    try {
-      const response = await axios.post('/api/tasks', taskData);
+    const result = await createTaskService(taskData, user.token);
+    if (result.success) {
       await fetchTasks(); // Refresh tasks
-      return { success: true, task: response.data.task };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to create task' 
-      };
     }
+    return result;
   };
 
   const createRecurringTask = async (taskData) => {
-    if (!user) {
+    if (!user || !user.token) {
       return { success: false, message: 'User not authenticated' };
     }
     
-    try {
-      const response = await axios.post('/api/tasks/recurring', taskData);
+    const result = await createRecurringTaskService(taskData, user.token);
+    if (result.success) {
       await fetchTasks(); // Refresh tasks
-      return { 
-        success: true, 
-        tasks: response.data.tasks,
-        count: response.data.count || 0
-      };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to create recurring task' 
-      };
     }
+    return result;
   };
 
 
@@ -179,20 +180,15 @@ export const TaskProvider = ({ children }) => {
   };
 
   const archiveTask = async (taskId) => {
-    if (!user) {
+    if (!user || !user.token) {
       return { success: false, message: 'User not authenticated' };
     }
     
-    try {
-      const response = await axios.post(`/api/tasks/${taskId}/archive`);
+    const result = await archiveTaskService(taskId, user.token);
+    if (result.success) {
       await fetchTasks(); // Refresh main tasks
-      return { success: true, task: response.data.task };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to archive task' 
-      };
     }
+    return result;
   };
 
   const fetchArchivedTasks = useCallback(async () => {
@@ -201,11 +197,10 @@ export const TaskProvider = ({ children }) => {
       return;
     }
     
-    try {
-      const response = await axios.get('/api/tasks/archived');
-      setArchivedTasks(response.data.tasks || []);
-    } catch (error) {
-      console.error('Error fetching archived tasks:', error);
+    const result = await fetchArchivedTasksService(user.token);
+    if (result.success) {
+      setArchivedTasks(result.tasks || []);
+    } else {
       setArchivedTasks([]);
     }
   }, [user]);

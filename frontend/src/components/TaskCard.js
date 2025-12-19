@@ -295,8 +295,11 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
     >
         <AccordionSummary
           expandIcon={<ExpandMoreIcon />}
-          {...(!isArchived && !isCompleted ? { ...attributes, ...listeners } : {})}
-          sx={styles.accordionSummary}
+          {...(!isArchived && !isCompleted ? { ...listeners } : {})}
+          sx={{
+            ...styles.accordionSummary,
+            ...(!isArchived && !isCompleted ? { cursor: 'grab', '&:active': { cursor: 'grabbing' } } : {})
+          }}
         >
           <Box display="flex" alignItems="center" width="100%" pr={1} sx={styles.accordionFlexBox}>
             <Box sx={styles.titleBox}>

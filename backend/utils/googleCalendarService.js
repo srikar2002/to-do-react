@@ -59,7 +59,14 @@ const makeTokenRequest = (params) => {
           if (res.statusCode === 200) {
             resolve(response);
           } else {
-            reject(new Error(response.error || 'Token request failed'));
+            // Include error description for better debugging
+            const errorMsg = response.error || 'Token request failed';
+            const errorDesc = response.error_description || '';
+            const fullError = errorDesc ? `${errorMsg}: ${errorDesc}` : errorMsg;
+            const error = new Error(fullError);
+            error.errorCode = response.error;
+            error.errorDescription = errorDesc;
+            reject(error);
           }
         } catch (error) {
           reject(new Error('Invalid JSON response: ' + data));
@@ -171,6 +178,7 @@ const createEventFromTask = async (accessToken, task, userTimezone = 'UTC') => {
 
 /**
  * Get or refresh access token for user
+ * Returns { token, refreshed, needsReauth } where needsReauth indicates user needs to re-authorize
  */
 const getValidAccessToken = async (user, clientId, clientSecret) => {
   if (!user.googleAccessToken) {
@@ -182,13 +190,39 @@ const getValidAccessToken = async (user, clientId, clientSecret) => {
       const tokenResponse = await refreshAccessToken(user.googleRefreshToken, clientId, clientSecret);
       user.googleAccessToken = tokenResponse.access_token;
       if (tokenResponse.refresh_token) user.googleRefreshToken = tokenResponse.refresh_token;
-      return { token: tokenResponse.access_token, refreshed: true };
+      return { token: tokenResponse.access_token, refreshed: true, needsReauth: false };
     } catch (error) {
       console.error('Error refreshing token:', error);
-      return { token: user.googleAccessToken, refreshed: false };
+      
+      // Check if it's an invalid_grant error (token expired/revoked)
+      if (error.errorCode === 'invalid_grant' || error.message.includes('invalid_grant')) {
+        // Clear invalid tokens and disable calendar integration
+        user.googleAccessToken = null;
+        user.googleRefreshToken = null;
+        user.googleCalendarEnabled = false;
+        await user.save();
+        
+        return { 
+          token: null, 
+          refreshed: false, 
+          needsReauth: true,
+          error: 'Refresh token expired or revoked. Please re-authorize Google Calendar access.'
+        };
+      }
+      
+      // For other errors, try using the existing token (might still be valid)
+      // But mark that refresh failed
+      return { 
+        token: user.googleAccessToken, 
+        refreshed: false, 
+        needsReauth: false,
+        refreshFailed: true
+      };
     }
   }
-  return { token: user.googleAccessToken, refreshed: false };
+  
+  // No refresh token available, use existing access token
+  return { token: user.googleAccessToken, refreshed: false, needsReauth: false };
 };
 
 module.exports = {

@@ -36,15 +36,38 @@ const createCalendarEventForTask = async (user, task) => {
   if (!clientId || !clientSecret) return;
 
   try {
-    const { token: accessToken, refreshed } = await getValidAccessToken(user, clientId, clientSecret);
-    if (refreshed) await user.save();
+    const tokenResult = await getValidAccessToken(user, clientId, clientSecret);
+    
+    // Check if re-authorization is needed
+    if (tokenResult.needsReauth) {
+      console.warn('Google Calendar re-authorization required:', tokenResult.error);
+      return; // Skip calendar event creation, user needs to re-authorize
+    }
+    
+    // Check if we have a valid token
+    if (!tokenResult.token) {
+      console.warn('No valid access token available for Google Calendar');
+      return;
+    }
+    
+    // Save user if token was refreshed
+    if (tokenResult.refreshed) {
+      await user.save();
+    }
     
     // Use user's timezone or default to UTC
     const userTimezone = user.timezone || 'UTC';
     
-    createEventFromTask(accessToken, task, userTimezone)
+    createEventFromTask(tokenResult.token, task, userTimezone)
       .then(event => console.log('Google Calendar event created:', event.id))
-      .catch(err => console.error('Failed to create Google Calendar event:', err));
+      .catch(err => {
+        // If we get a 401, the token might be invalid even after refresh attempt
+        if (err.message && err.message.includes('401')) {
+          console.error('Failed to create Google Calendar event: Invalid credentials. User may need to re-authorize.');
+        } else {
+          console.error('Failed to create Google Calendar event:', err);
+        }
+      });
   } catch (error) {
     console.error('Error creating Google Calendar event:', error);
   }
