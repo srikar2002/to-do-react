@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { TaskStatus } from '../constants/enums';
 
 /**
  * Task Service
@@ -184,6 +185,137 @@ export const deleteTask = async (taskId, token) => {
     return { 
       success: false, 
       message: error.response?.data?.message || 'Failed to delete task' 
+    };
+  }
+};
+
+/**
+ * Restore an archived task
+ * @param {string} taskId - Task ID to restore
+ * @param {string} token - User authentication token
+ * @returns {Promise<{success: boolean, task?: object, message?: string}>}
+ */
+export const restoreTask = async (taskId, token) => {
+  if (!token) {
+    return { success: false, message: 'No authentication token provided' };
+  }
+
+  try {
+    const response = await axios.post(`/api/tasks/${taskId}/restore`, {}, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return { success: true, task: response.data.task };
+  } catch (error) {
+    console.error('Error restoring task:', error);
+    return { 
+      success: false, 
+      message: error.response?.data?.message || 'Failed to restore task' 
+    };
+  }
+};
+
+/**
+ * Get users for task sharing
+ * @param {string} search - Search query for users
+ * @param {string} token - User authentication token
+ * @returns {Promise<{success: boolean, users?: array, message?: string}>}
+ */
+export const getUsers = async (search = '', token) => {
+  if (!token) {
+    return { success: false, message: 'No authentication token provided', users: [] };
+  }
+
+  try {
+    const params = search ? { params: { search } } : {};
+    const response = await axios.get('/api/tasks/users', {
+      ...params,
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return { success: true, users: response.data.users || [] };
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    return { 
+      success: false, 
+      message: error.response?.data?.message || 'Failed to fetch users',
+      users: []
+    };
+  }
+};
+
+/**
+ * Share a task with users
+ * @param {string} taskId - Task ID to share
+ * @param {array} userIds - Array of user IDs to share with
+ * @param {string} token - User authentication token
+ * @returns {Promise<{success: boolean, task?: object, message?: string}>}
+ */
+export const shareTask = async (taskId, userIds, token) => {
+  if (!token) {
+    return { success: false, message: 'No authentication token provided' };
+  }
+
+  try {
+    const response = await axios.post(`/api/tasks/${taskId}/share`, { userIds }, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return { success: true, task: response.data.task };
+  } catch (error) {
+    console.error('Error sharing task:', error);
+    return { 
+      success: false, 
+      message: error.response?.data?.message || 'Failed to share task' 
+    };
+  }
+};
+
+/**
+ * Unshare a task from a user
+ * @param {string} taskId - Task ID to unshare
+ * @param {string} userId - User ID to unshare from
+ * @param {string} token - User authentication token
+ * @returns {Promise<{success: boolean, task?: object, message?: string}>}
+ */
+export const unshareTask = async (taskId, userId, token) => {
+  if (!token) {
+    return { success: false, message: 'No authentication token provided' };
+  }
+
+  try {
+    const response = await axios.delete(`/api/tasks/${taskId}/share/${userId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    return { success: true, task: response.data.task };
+  } catch (error) {
+    console.error('Error unsharing task:', error);
+    return { 
+      success: false, 
+      message: error.response?.data?.message || 'Failed to unshare task' 
+    };
+  }
+};
+
+/**
+ * Toggle task status between PENDING and COMPLETED
+ * @param {string} taskId - Task ID to toggle
+ * @param {string} currentStatus - Current task status
+ * @param {string} token - User authentication token
+ * @returns {Promise<{success: boolean, task?: object, message?: string}>}
+ */
+export const toggleTaskStatus = async (taskId, currentStatus, token) => {
+  if (!token) {
+    return { success: false, message: 'No authentication token provided' };
+  }
+
+  const newStatus = currentStatus === TaskStatus.PENDING ? TaskStatus.COMPLETED : TaskStatus.PENDING;
+  
+  try {
+    const result = await updateTask(taskId, { status: newStatus }, token);
+    return result;
+  } catch (error) {
+    console.error('Error toggling task status:', error);
+    return { 
+      success: false, 
+      message: error.response?.data?.message || 'Failed to toggle task status' 
     };
   }
 };

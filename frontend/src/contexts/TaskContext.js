@@ -1,6 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useOptimistic } from 'react';
-import axios from 'axios';
-import dayjs from 'dayjs';
 import { useAuth } from './AuthContext';
 import { TaskStatus } from '../constants/enums';
 import { useSocket } from '../hooks/useSocket';
@@ -11,7 +9,12 @@ import {
   archiveTask as archiveTaskService,
   fetchArchivedTasks as fetchArchivedTasksService,
   updateTask as updateTaskService, 
-  deleteTask as deleteTaskService 
+  deleteTask as deleteTaskService,
+  restoreTask as restoreTaskService,
+  getUsers as getUsersService,
+  shareTask as shareTaskService,
+  unshareTask as unshareTaskService,
+  toggleTaskStatus as toggleTaskStatusService
 } from '../services/taskService';
 
 const TaskContext = createContext();
@@ -114,7 +117,7 @@ export const TaskProvider = ({ children }) => {
     
     const result = await createTaskService(taskData, user.token);
     if (result.success) {
-      await fetchTasks(); // Refresh tasks
+      await fetchTasks();
     }
     return result;
   };
@@ -126,11 +129,13 @@ export const TaskProvider = ({ children }) => {
     
     const result = await createRecurringTaskService(taskData, user.token);
     if (result.success) {
-      await fetchTasks(); // Refresh tasks
+      // Only fetch main tasks, NOT archived tasks
+      // The parent recurring task (archived) should NOT be added to archivedTasks
+      // It will only appear if user explicitly fetches archived tasks
+      await fetchTasks();
     }
     return result;
   };
-
 
   const updateTask = async (taskId, taskData) => {
     if (!user || !user.token) {
@@ -139,7 +144,7 @@ export const TaskProvider = ({ children }) => {
     
     const result = await updateTaskService(taskId, taskData, user.token);
     if (result.success) {
-      await fetchTasks(); // Refresh tasks
+      await fetchTasks();
     }
     return result;
   };
@@ -151,19 +156,22 @@ export const TaskProvider = ({ children }) => {
     
     const result = await deleteTaskService(taskId, user.token);
     if (result.success) {
-      await fetchTasks(); // Refresh tasks
+      await fetchTasks();
     }
     return result;
   };
 
   const toggleTaskStatus = async (taskId, currentStatus) => {
-    const newStatus = currentStatus === TaskStatus.PENDING ? TaskStatus.COMPLETED : TaskStatus.PENDING;
+    if (!user || !user.token) {
+      return { success: false, message: 'User not authenticated' };
+    }
     
     // React 19: Optimistically update the UI immediately
+    const newStatus = currentStatus === TaskStatus.PENDING ? TaskStatus.COMPLETED : TaskStatus.PENDING;
     setOptimisticTaskStatus({ taskId, newStatus });
     
     try {
-      const result = await updateTask(taskId, { status: newStatus });
+      const result = await toggleTaskStatusService(taskId, currentStatus, user.token);
       // If the update fails, fetchTasks will revert the optimistic update
       if (!result.success) {
         await fetchTasks();
@@ -186,7 +194,7 @@ export const TaskProvider = ({ children }) => {
     
     const result = await archiveTaskService(taskId, user.token);
     if (result.success) {
-      await fetchTasks(); // Refresh main tasks
+      await fetchTasks();
     }
     return result;
   };
@@ -199,67 +207,57 @@ export const TaskProvider = ({ children }) => {
     
     const result = await fetchArchivedTasksService(user.token);
     if (result.success) {
-      setArchivedTasks(result.tasks || []);
+      // Filter out parent recurring tasks - they should not appear in archivedTasks
+      // Parent recurring tasks are automatically archived but are not user-archived tasks
+      const filteredTasks = (result.tasks || []).filter(task => !task.isRecurring);
+      setArchivedTasks(filteredTasks);
     } else {
       setArchivedTasks([]);
     }
   }, [user]);
 
   const restoreTask = async (taskId) => {
-    if (!user) return { success: false, message: 'User not authenticated' };
-    try {
-      const response = await axios.post(`/api/tasks/${taskId}/restore`);
-      await Promise.all([fetchArchivedTasks(), fetchTasks()]);
-      return { success: true, task: response.data.task };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to restore task' 
-      };
+    if (!user || !user.token) {
+      return { success: false, message: 'User not authenticated' };
     }
+    
+    const result = await restoreTaskService(taskId, user.token);
+    if (result.success) {
+      await Promise.all([fetchArchivedTasks(), fetchTasks()]);
+    }
+    return result;
   };
 
   const getUsers = async (search = '') => {
-    if (!user) return { success: false, message: 'User not authenticated', users: [] };
-    try {
-      const params = search ? { params: { search } } : {};
-      const response = await axios.get('/api/tasks/users', params);
-      return { success: true, users: response.data.users || [] };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to fetch users',
-        users: []
-      };
+    if (!user || !user.token) {
+      return { success: false, message: 'User not authenticated', users: [] };
     }
+    
+    return await getUsersService(search, user.token);
   };
 
   const shareTask = async (taskId, userIds) => {
-    if (!user) return { success: false, message: 'User not authenticated' };
-    try {
-      const response = await axios.post(`/api/tasks/${taskId}/share`, { userIds });
-      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
-      return { success: true, task: response.data.task };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to share task' 
-      };
+    if (!user || !user.token) {
+      return { success: false, message: 'User not authenticated' };
     }
+    
+    const result = await shareTaskService(taskId, userIds, user.token);
+    if (result.success) {
+      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
+    }
+    return result;
   };
 
   const unshareTask = async (taskId, userId) => {
-    if (!user) return { success: false, message: 'User not authenticated' };
-    try {
-      const response = await axios.delete(`/api/tasks/${taskId}/share/${userId}`);
-      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
-      return { success: true, task: response.data.task };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Failed to unshare task' 
-      };
+    if (!user || !user.token) {
+      return { success: false, message: 'User not authenticated' };
     }
+    
+    const result = await unshareTaskService(taskId, userId, user.token);
+    if (result.success) {
+      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
+    }
+    return result;
   };
 
   // Set up WebSocket event listeners for real-time updates
@@ -280,12 +278,39 @@ export const TaskProvider = ({ children }) => {
 
     // Event handlers
     const handlers = {
-      'task:created': () => refreshTasks(),
+      'task:created': (task) => {
+        // Only refresh tasks for non-archived tasks
+        // Archived tasks (like parent recurring tasks) should not be added to archivedTasks
+        // They will only appear when fetchArchivedTasks() is explicitly called
+        // IMPORTANT: Ignore parent recurring tasks (isRecurring: true) completely
+        if (task && task.isRecurring) {
+          // This is a parent recurring task - ignore it completely
+          return;
+        }
+        if (task && !task.archived) {
+          refreshTasks();
+        }
+        // Ignore archived tasks created via WebSocket - they shouldn't appear in archivedTasks
+        // unless explicitly fetched by the user
+      },
       'task:updated': (task) => {
+        // IMPORTANT: Ignore parent recurring tasks (isRecurring: true) completely
+        if (task && task.isRecurring) {
+          // This is a parent recurring task - ignore it completely
+          return;
+        }
         if (task.archived) {
+          // Only update existing archived tasks, don't add new ones
+          // New archived tasks should only be added via task:archived event
           setArchivedTasks(prev => {
             const idx = prev.findIndex(t => t._id === task._id);
-            return idx !== -1 ? prev.map((t, i) => i === idx ? task : t) : prev;
+            if (idx !== -1) {
+              // Update existing archived task
+              return prev.map((t, i) => i === idx ? task : t);
+            }
+            // Don't add new archived tasks here - they should only appear
+            // when explicitly fetched via fetchArchivedTasks()
+            return prev;
           });
           removeFromDateBuckets(task._id);
         } else {
@@ -298,8 +323,30 @@ export const TaskProvider = ({ children }) => {
         setArchivedTasks(prev => prev.filter(t => t._id !== taskId));
       },
       'task:archived': (task) => {
+        // This event is only emitted when user explicitly archives a task via the archive button
+        // It should NOT be triggered when creating recurring tasks
+        // IMPORTANT: Do NOT add parent recurring tasks (isRecurring: true) to archivedTasks
+        // They are automatically archived but should only appear when explicitly fetched
+        if (task && task.isRecurring) {
+          // This is a parent recurring task - don't add it to archivedTasks
+          // It will only appear when fetchArchivedTasks() is explicitly called
+          removeFromDateBuckets(task._id);
+          refreshTasks();
+          return;
+        }
+        
         removeFromDateBuckets(task._id);
         refreshTasks();
+        // Add to archivedTasks only when explicitly archived by user action (and not a parent recurring task)
+        if (task && task.archived) {
+          setArchivedTasks(prev => {
+            const idx = prev.findIndex(t => t._id === task._id);
+            if (idx === -1) {
+              return [...prev, task];
+            }
+            return prev;
+          });
+        }
       },
       'task:restored': (task) => {
         setArchivedTasks(prev => prev.filter(t => t._id !== task._id));

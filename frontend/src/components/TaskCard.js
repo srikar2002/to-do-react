@@ -173,9 +173,16 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
         setSelectedUsers(prevUsers => prevUsers.filter(u => normalizeId(u) !== userId));
         return prev.filter(id => id !== userId);
       } else {
-        // Add user
+        // Add user - check if already exists to prevent duplicates
         if (user) {
-          setSelectedUsers(prevUsers => [...prevUsers, user]);
+          setSelectedUsers(prevUsers => {
+            // Check if user is already in the array
+            const alreadyExists = prevUsers.some(u => normalizeId(u) === userId);
+            if (alreadyExists) {
+              return prevUsers; // Don't add duplicate
+            }
+            return [...prevUsers, user];
+          });
         }
         return [...prev, userId];
       }
@@ -557,26 +564,32 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                 Selected to Add:
               </Typography>
               <Box sx={styles.shareDialogSelectedBox}>
-                {selectedUsers.map((user) => {
-                  const userId = normalizeId(user);
-                  // Don't show users that are already shared
-                  const isAlreadyShared = task.sharedWith?.some(
-                    su => normalizeId(su) === userId
-                  );
-                  if (isAlreadyShared) return null;
-                  
-                  return (
-                    <Chip
-                      key={userId}
-                      label={`${user.name}${user.email ? ` (${user.email})` : ''}`}
-                      onDelete={() => handleRemoveSelectedUser(userId)}
-                      deleteIcon={<CloseIcon />}
-                      color="primary"
-                      variant="outlined"
-                      size="small"
-                    />
-                  );
-                })}
+                {selectedUsers
+                  .filter((user, index, self) => {
+                    // Remove duplicates by checking if this is the first occurrence of this userId
+                    const userId = normalizeId(user);
+                    return index === self.findIndex(u => normalizeId(u) === userId);
+                  })
+                  .map((user) => {
+                    const userId = normalizeId(user);
+                    // Don't show users that are already shared
+                    const isAlreadyShared = task.sharedWith?.some(
+                      su => normalizeId(su) === userId
+                    );
+                    if (isAlreadyShared) return null;
+                    
+                    return (
+                      <Chip
+                        key={userId}
+                        label={`${user.name}${user.email ? ` (${user.email})` : ''}`}
+                        onDelete={() => handleRemoveSelectedUser(userId)}
+                        deleteIcon={<CloseIcon />}
+                        color="primary"
+                        variant="outlined"
+                        size="small"
+                      />
+                    );
+                  })}
               </Box>
               <Divider sx={styles.divider} />
             </>
