@@ -2,7 +2,6 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { SnackbarProvider } from 'notistack';
 import { AuthProvider } from './contexts/AuthContext';
-import { TaskProvider } from './contexts/TaskContext';
 import Login from './components/auth/Login';
 import Register from './components/auth/Register';
 import Dashboard from './components/Dashboard';
@@ -20,29 +19,27 @@ function App() {
       autoHideDuration={3000}
     >
       <AuthProvider>
-        <TaskProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/profile" 
-              element={
-                <ProtectedRoute>
-                  <Profile />
-                </ProtectedRoute>
-              } 
-            />
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          </Routes>
-        </TaskProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route 
+            path="/dashboard" 
+            element={
+              <ProtectedRoute>
+                <Dashboard />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
       </AuthProvider>
     </SnackbarProvider>
   );

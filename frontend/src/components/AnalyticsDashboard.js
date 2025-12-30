@@ -2,7 +2,7 @@ import React, { useMemo, useDeferredValue } from 'react';
 import { Box, Card, CardContent, Typography, Grid, useTheme } from '@mui/material';
 import { Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from 'chart.js';
-import { useTasks } from '../contexts/TaskContext';
+import { useTasks } from '../hooks/useTasks';
 import { useTheme as useThemeContext } from '../contexts/ThemeContext';
 import { TaskStatus, TaskPriority } from '../constants/enums';
 import { getAnalyticsStyles } from '../styles/analyticsStyles';

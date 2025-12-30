@@ -43,7 +43,7 @@ import {
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { TaskStatus, TaskPriority } from '../constants/enums';
-import { useTasks } from '../contexts/TaskContext';
+import { useTasks } from '../hooks/useTasks';
 import { useAuth } from '../contexts/AuthContext';
 import { useSnackbar } from 'notistack';
 import { getTaskCardStyles } from '../styles/taskCardStyles';

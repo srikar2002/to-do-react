@@ -64,7 +64,7 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable';
 import { useAuth } from '../contexts/AuthContext';
-import { useTasks } from '../contexts/TaskContext';
+import { useTasks } from '../hooks/useTasks';
 import { useTheme } from '../contexts/ThemeContext';
 import TaskCard from './TaskCard';
 import AnalyticsDashboard from './AnalyticsDashboard';
