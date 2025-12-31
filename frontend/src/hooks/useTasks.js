@@ -158,11 +158,30 @@ export const useTasks = () => {
     
     try {
       const result = await toggleTaskStatusService(taskId, currentStatus, user.token);
-      if (!result.success) {
+      if (result.success && result.task) {
+        // Update the task directly in state to avoid flickering
+        // This ensures the UI stays consistent with the optimistic update
+        setTasks(prev => {
+          const updateTaskInArray = (taskArray) =>
+            taskArray.map(task => 
+              task._id === taskId 
+                ? result.task
+                : task
+            );
+
+          return {
+            today: updateTaskInArray(prev.today),
+            tomorrow: updateTaskInArray(prev.tomorrow),
+            dayAfterTomorrow: updateTaskInArray(prev.dayAfterTomorrow)
+          };
+        });
+      } else if (!result.success) {
+        // Only refresh if the operation failed
         await fetchTasks();
       }
       return result;
     } catch (error) {
+      // On error, refresh to get the correct state
       await fetchTasks();
       return { 
         success: false, 
@@ -282,7 +301,23 @@ export const useTasks = () => {
           });
           removeFromDateBuckets(task._id);
         } else {
-          refreshTasks();
+          // Update the specific task directly instead of refreshing all tasks
+          // This prevents flickering when toggling task status
+          setTasks(prev => {
+            const updateTaskInArray = (taskArray) => {
+              const idx = taskArray.findIndex(t => t._id === task._id);
+              if (idx !== -1) {
+                return taskArray.map((t, i) => i === idx ? task : t);
+              }
+              return taskArray;
+            };
+
+            return {
+              today: updateTaskInArray(prev.today),
+              tomorrow: updateTaskInArray(prev.tomorrow),
+              dayAfterTomorrow: updateTaskInArray(prev.dayAfterTomorrow)
+            };
+          });
           setArchivedTasks(prev => prev.filter(t => t._id !== task._id));
         }
       },

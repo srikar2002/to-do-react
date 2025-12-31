@@ -9,6 +9,50 @@ const { createEventFromTask, getValidAccessToken } = require('../utils/googleCal
 
 const router = express.Router();
 
+// Rollover all users' tasks (for scheduled job) - must be before auth middleware
+router.post('/rollover-all', async (req, res) => {
+  try {
+    const today = dayjs().format('YYYY-MM-DD');
+    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+    
+    // Find all pending tasks from today for all users with rollover enabled (excluding archived)
+    const tasksToRollover = await Task.find({
+      date: today,
+      status: 'Pending',
+      rollover: true,
+      archived: false
+    });
+    
+    if (tasksToRollover.length === 0) {
+      return res.json({ 
+        message: 'No tasks to rollover for any user', 
+        rolledOverCount: 0 
+      });
+    }
+    
+    // Update all pending tasks with rollover enabled to tomorrow's date (excluding archived)
+    const updateResult = await Task.updateMany(
+      {
+        date: today,
+        status: 'Pending',
+        rollover: true,
+        archived: false
+      },
+      {
+        $set: { date: tomorrow }
+      }
+    );
+    
+    res.json({
+      message: `Successfully rolled over ${updateResult.modifiedCount} tasks to tomorrow for all users`,
+      rolledOverCount: updateResult.modifiedCount
+    });
+  } catch (error) {
+    console.error('Rollover all tasks error:', error);
+    res.status(500).json({ message: 'Server error while rolling over all tasks' });
+  }
+});
+
 // Apply authentication middleware to all routes
 router.use(verifyToken);
 
@@ -438,49 +482,6 @@ router.delete('/:id', async (req, res) => {
   } catch (error) {
     console.error('Delete task error:', error);
     res.status(500).json({ message: 'Server error while deleting task' });
-  }
-});
-
-
-// Rollover all users' tasks (for scheduled job)
-router.post('/rollover-all', async (req, res) => {
-  try {
-    const today = dayjs().format('YYYY-MM-DD');
-    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-    
-    // Find all pending tasks from today for all users (excluding archived)
-    const tasksToRollover = await Task.find({
-      date: today,
-      status: 'Pending',
-      archived: false
-    });
-    
-    if (tasksToRollover.length === 0) {
-      return res.json({ 
-        message: 'No tasks to rollover for any user', 
-        rolledOverCount: 0 
-      });
-    }
-    
-    // Update all pending tasks to tomorrow's date (excluding archived)
-    const updateResult = await Task.updateMany(
-      {
-        date: today,
-        status: 'Pending',
-        archived: false
-      },
-      {
-        $set: { date: tomorrow }
-      }
-    );
-    
-    res.json({
-      message: `Successfully rolled over ${updateResult.modifiedCount} tasks to tomorrow for all users`,
-      rolledOverCount: updateResult.modifiedCount
-    });
-  } catch (error) {
-    console.error('Rollover all tasks error:', error);
-    res.status(500).json({ message: 'Server error while rolling over all tasks' });
   }
 });
 

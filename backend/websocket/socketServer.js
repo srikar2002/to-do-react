@@ -39,17 +39,19 @@ const initializeSocket = (server) => {
   });
 
   io.on('connection', (socket) => {
-    console.log(`User connected: ${socket.user.name} (${socket.userId})`);
+    // Only log initial connections in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`User connected: ${socket.user.name} (${socket.userId})`);
+    }
     socket.join(`user:${socket.userId}`);
     
     socket.on('disconnect', (reason) => {
-      // Only log unexpected disconnects (not normal page refreshes)
+      // Only log unexpected disconnects in development
       // 'transport close' and 'client disconnect' are normal on page refresh
-      if (reason === 'io server disconnect' || reason === 'ping timeout') {
-        console.log(`User disconnected: ${socket.user.name} (${socket.userId}) - Reason: ${reason}`);
-      } else {
-        // Page refresh or normal client disconnect - less verbose
-        console.log(`User disconnected: ${socket.user.name} (${socket.userId})`);
+      if (process.env.NODE_ENV === 'development') {
+        if (reason === 'io server disconnect' || reason === 'ping timeout') {
+          console.log(`User disconnected: ${socket.user.name} (${socket.userId}) - Reason: ${reason}`);
+        }
       }
     });
     
