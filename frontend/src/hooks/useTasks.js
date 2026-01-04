@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useOptimistic } from 'react';
+import { useState, useEffect, useCallback, useOptimistic } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { TaskStatus } from '../constants/enums';
 import { useSocket } from './useSocket';
@@ -17,6 +17,13 @@ import {
   toggleTaskStatus as toggleTaskStatusService
 } from '../services/taskService';
 
+// Constants
+const EMPTY_TASKS_STATE = {
+  today: [],
+  tomorrow: [],
+  dayAfterTomorrow: []
+};
+
 /**
  * Custom hook to manage tasks state and operations
  * Replaces TaskContext functionality
@@ -24,11 +31,7 @@ import {
 export const useTasks = () => {
   const { user } = useAuth();
   const socket = useSocket();
-  const [tasks, setTasks] = useState({
-    today: [],
-    tomorrow: [],
-    dayAfterTomorrow: []
-  });
+  const [tasks, setTasks] = useState(EMPTY_TASKS_STATE);
   const [dates, setDates] = useState({
     today: '',
     tomorrow: '',
@@ -36,16 +39,45 @@ export const useTasks = () => {
   });
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [loading, setLoading] = useState(false);
-  
+
+  // Helper: Update task in all date buckets
+  const updateTaskInBuckets = useCallback((taskId, updater) => {
+    setTasks(prev => {
+      const updateTaskInArray = (taskArray) => taskArray.map(task => 
+        task._id === taskId ? updater(task) : task
+      );
+      return {
+        today: updateTaskInArray(prev.today),
+        tomorrow: updateTaskInArray(prev.tomorrow),
+        dayAfterTomorrow: updateTaskInArray(prev.dayAfterTomorrow)
+      };
+    });
+  }, []);
+
+  // Helper: Remove task from all date buckets
+  const removeFromDateBuckets = useCallback((taskId) => {
+    setTasks(prev => ({
+      today: prev.today.filter(t => t._id !== taskId),
+      tomorrow: prev.tomorrow.filter(t => t._id !== taskId),
+      dayAfterTomorrow: prev.dayAfterTomorrow.filter(t => t._id !== taskId)
+    }));
+  }, []);
+
+  // Helper: Check authentication
+  const checkAuth = useCallback(() => {
+    if (!user || !user.token) {
+      return { success: false, message: 'User not authenticated' };
+    }
+    return null;
+  }, [user]);
+
   // React 19: useOptimistic for immediate UI feedback when toggling task status
   const [optimisticTasks, setOptimisticTaskStatus] = useOptimistic(
     tasks,
     (currentTasks, { taskId, newStatus }) => {
       const updateTaskInArray = (taskArray) =>
         taskArray.map(task => 
-          task._id === taskId 
-            ? { ...task, status: newStatus }
-            : task
+          task._id === taskId ? { ...task, status: newStatus } : task
         );
 
       return {
@@ -55,9 +87,6 @@ export const useTasks = () => {
       };
     }
   );
-  
-  // Keep a ref to the latest fetchTasks function to avoid stale closures
-  const fetchTasksRef = useRef(null);
 
   const fetchTasks = useCallback(async () => {
     if (!user || !user.id || !user.token) {
@@ -68,89 +97,70 @@ export const useTasks = () => {
     try {
       const result = await fetchTasksService(user.token);
       if (result.success && result.tasks && result.dates) {
-        const fetchedTasks = {
+        setTasks({
           today: result.tasks[result.dates.today] || [],
           tomorrow: result.tasks[result.dates.tomorrow] || [],
           dayAfterTomorrow: result.tasks[result.dates.dayAfterTomorrow] || []
-        };
-        setTasks(fetchedTasks);
+        });
         setDates(result.dates);
       } else {
-        setTasks({
-          today: [],
-          tomorrow: [],
-          dayAfterTomorrow: []
-        });
+        setTasks(EMPTY_TASKS_STATE);
       }
     } catch (error) {
       console.error('Error fetching tasks:', error);
-      setTasks({
-        today: [],
-        tomorrow: [],
-        dayAfterTomorrow: []
-      });
+      setTasks(EMPTY_TASKS_STATE);
     } finally {
       setLoading(false);
     }
   }, [user]);
-  
-  // Update ref when fetchTasks changes
-  useEffect(() => {
-    fetchTasksRef.current = fetchTasks;
-  }, [fetchTasks]);
 
-  const createTask = async (taskData) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
+  // Generic mutation wrapper
+  const withMutation = useCallback(async (serviceCall, refetchTasks = true) => {
+    const authError = checkAuth();
+    if (authError) return authError;
     
-    const result = await createTaskService(taskData, user.token);
-    if (result.success) {
+    const result = await serviceCall(user.token);
+    if (result.success && refetchTasks) {
       await fetchTasks();
     }
     return result;
-  };
+  }, [user, checkAuth, fetchTasks]);
 
-  const createRecurringTask = async (taskData) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
+  // Generic mutation wrapper with multiple refetches
+  const withMultiMutation = useCallback(async (serviceCall, refetchFunctions) => {
+    const authError = checkAuth();
+    if (authError) return authError;
     
-    const result = await createRecurringTaskService(taskData, user.token);
-    if (result.success) {
-      await fetchTasks();
+    const result = await serviceCall(user.token);
+    if (result.success && refetchFunctions) {
+      await Promise.all(refetchFunctions.map(fn => fn()));
     }
     return result;
-  };
+  }, [user, checkAuth]);
 
-  const updateTask = async (taskId, taskData) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
-    
-    const result = await updateTaskService(taskId, taskData, user.token);
-    if (result.success) {
-      await fetchTasks();
-    }
-    return result;
-  };
+  const createTask = useCallback((taskData) => 
+    withMutation(() => createTaskService(taskData, user.token))
+  , [user, withMutation]);
 
-  const deleteTask = async (taskId) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
-    
-    const result = await deleteTaskService(taskId, user.token);
-    if (result.success) {
-      await fetchTasks();
-    }
-    return result;
-  };
+  const createRecurringTask = useCallback((taskData) => 
+    withMutation(() => createRecurringTaskService(taskData, user.token))
+  , [user, withMutation]);
 
-  const toggleTaskStatus = async (taskId, currentStatus) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
+  const updateTask = useCallback((taskId, taskData) => 
+    withMutation(() => updateTaskService(taskId, taskData, user.token))
+  , [user, withMutation]);
+
+  const deleteTask = useCallback((taskId) => 
+    withMutation(() => deleteTaskService(taskId, user.token))
+  , [user, withMutation]);
+
+  const archiveTask = useCallback((taskId) => 
+    withMutation(() => archiveTaskService(taskId, user.token))
+  , [user, withMutation]);
+
+  const toggleTaskStatus = useCallback(async (taskId, currentStatus) => {
+    const authError = checkAuth();
+    if (authError) return authError;
     
     // React 19: Optimistically update the UI immediately
     const newStatus = currentStatus === TaskStatus.PENDING ? TaskStatus.COMPLETED : TaskStatus.PENDING;
@@ -159,48 +169,19 @@ export const useTasks = () => {
     try {
       const result = await toggleTaskStatusService(taskId, currentStatus, user.token);
       if (result.success && result.task) {
-        // Update the task directly in state to avoid flickering
-        // This ensures the UI stays consistent with the optimistic update
-        setTasks(prev => {
-          const updateTaskInArray = (taskArray) =>
-            taskArray.map(task => 
-              task._id === taskId 
-                ? result.task
-                : task
-            );
-
-          return {
-            today: updateTaskInArray(prev.today),
-            tomorrow: updateTaskInArray(prev.tomorrow),
-            dayAfterTomorrow: updateTaskInArray(prev.dayAfterTomorrow)
-          };
-        });
+        updateTaskInBuckets(taskId, () => result.task);
       } else if (!result.success) {
-        // Only refresh if the operation failed
         await fetchTasks();
       }
       return result;
     } catch (error) {
-      // On error, refresh to get the correct state
       await fetchTasks();
       return { 
         success: false, 
         message: error.response?.data?.message || 'Failed to toggle task status' 
       };
     }
-  };
-
-  const archiveTask = async (taskId) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
-    
-    const result = await archiveTaskService(taskId, user.token);
-    if (result.success) {
-      await fetchTasks();
-    }
-    return result;
-  };
+  }, [user, checkAuth, setOptimisticTaskStatus, updateTaskInBuckets, fetchTasks]);
 
   const fetchArchivedTasks = useCallback(async () => {
     if (!user || !user.id || !user.token) {
@@ -209,115 +190,79 @@ export const useTasks = () => {
     }
     
     const result = await fetchArchivedTasksService(user.token);
-    if (result.success) {
-      const filteredTasks = (result.tasks || []).filter(task => !task.isRecurring);
-      setArchivedTasks(filteredTasks);
-    } else {
-      setArchivedTasks([]);
-    }
+    setArchivedTasks(result.success 
+      ? (result.tasks || []).filter(task => !task.isRecurring)
+      : []
+    );
   }, [user]);
 
-  const restoreTask = async (taskId) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
-    
-    const result = await restoreTaskService(taskId, user.token);
-    if (result.success) {
-      await Promise.all([fetchArchivedTasks(), fetchTasks()]);
-    }
-    return result;
-  };
+  const restoreTask = useCallback((taskId) => 
+    withMultiMutation(
+      () => restoreTaskService(taskId, user.token),
+      [fetchArchivedTasks, fetchTasks]
+    )
+  , [user, withMultiMutation, fetchArchivedTasks, fetchTasks]);
 
-  const getUsers = async (search = '') => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated', users: [] };
-    }
-    
+  const getUsers = useCallback(async (search = '') => {
+    const authError = checkAuth();
+    if (authError) return { ...authError, users: [] };
     return await getUsersService(search, user.token);
-  };
+  }, [user, checkAuth]);
 
-  const shareTask = async (taskId, userIds) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
-    
-    const result = await shareTaskService(taskId, userIds, user.token);
-    if (result.success) {
-      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
-    }
-    return result;
-  };
+  const shareTask = useCallback((taskId, userIds) => 
+    withMultiMutation(
+      () => shareTaskService(taskId, userIds, user.token),
+      [fetchTasks, fetchArchivedTasks]
+    )
+  , [user, withMultiMutation, fetchTasks, fetchArchivedTasks]);
 
-  const unshareTask = async (taskId, userId) => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
-    
-    const result = await unshareTaskService(taskId, userId, user.token);
-    if (result.success) {
-      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
-    }
-    return result;
-  };
+  const unshareTask = useCallback((taskId, userId) => 
+    withMultiMutation(
+      () => unshareTaskService(taskId, userId, user.token),
+      [fetchTasks, fetchArchivedTasks]
+    )
+  , [user, withMultiMutation, fetchTasks, fetchArchivedTasks]);
 
   // Set up WebSocket event listeners for real-time updates
   useEffect(() => {
     if (!socket) return;
 
-    // Helper to remove task from date buckets
-    const removeFromDateBuckets = (taskId) => {
-      setTasks(prev => ({
-        today: prev.today.filter(t => t._id !== taskId),
-        tomorrow: prev.tomorrow.filter(t => t._id !== taskId),
-        dayAfterTomorrow: prev.dayAfterTomorrow.filter(t => t._id !== taskId)
-      }));
+    // Helper: Update archived tasks
+    const updateArchivedTask = (task) => {
+      setArchivedTasks(prev => {
+        const idx = prev.findIndex(t => t._id === task._id);
+        if (idx !== -1) {
+          return prev.map((t, i) => i === idx ? task : t);
+        }
+        return prev;
+      });
     };
 
-    // Helper to refresh tasks
-    const refreshTasks = () => fetchTasksRef.current?.();
+    // Helper: Add task to archived if not exists
+    const addToArchived = (task) => {
+      setArchivedTasks(prev => {
+        if (prev.findIndex(t => t._id === task._id) === -1) {
+          return [...prev, task];
+        }
+        return prev;
+      });
+    };
 
     // Event handlers
     const handlers = {
       'task:created': (task) => {
-        if (task && task.isRecurring) {
-          return;
-        }
-        if (task && !task.archived) {
-          refreshTasks();
+        if (!task?.isRecurring && !task?.archived) {
+          fetchTasks();
         }
       },
       'task:updated': (task) => {
-        if (task && task.isRecurring) {
-          return;
-        }
+        if (task?.isRecurring) return;
+        
         if (task.archived) {
-          setArchivedTasks(prev => {
-            const idx = prev.findIndex(t => t._id === task._id);
-            if (idx !== -1) {
-              return prev.map((t, i) => i === idx ? task : t);
-            }
-            return prev;
-          });
+          updateArchivedTask(task);
           removeFromDateBuckets(task._id);
         } else {
-          // Update the specific task directly instead of refreshing all tasks
-          // This prevents flickering when toggling task status
-          setTasks(prev => {
-            const updateTaskInArray = (taskArray) => {
-              const idx = taskArray.findIndex(t => t._id === task._id);
-              if (idx !== -1) {
-                return taskArray.map((t, i) => i === idx ? task : t);
-              }
-              return taskArray;
-            };
-
-            return {
-              today: updateTaskInArray(prev.today),
-              tomorrow: updateTaskInArray(prev.tomorrow),
-              dayAfterTomorrow: updateTaskInArray(prev.dayAfterTomorrow)
-            };
-          });
+          updateTaskInBuckets(task._id, () => task);
           setArchivedTasks(prev => prev.filter(t => t._id !== task._id));
         }
       },
@@ -326,31 +271,19 @@ export const useTasks = () => {
         setArchivedTasks(prev => prev.filter(t => t._id !== taskId));
       },
       'task:archived': (task) => {
-        if (task && task.isRecurring) {
-          removeFromDateBuckets(task._id);
-          refreshTasks();
-          return;
-        }
-        
         removeFromDateBuckets(task._id);
-        refreshTasks();
-        if (task && task.archived) {
-          setArchivedTasks(prev => {
-            const idx = prev.findIndex(t => t._id === task._id);
-            if (idx === -1) {
-              return [...prev, task];
-            }
-            return prev;
-          });
+        fetchTasks();
+        if (task?.archived) {
+          addToArchived(task);
         }
       },
       'task:restored': (task) => {
         setArchivedTasks(prev => prev.filter(t => t._id !== task._id));
-        refreshTasks();
+        fetchTasks();
       },
-      'task:shared': refreshTasks,
-      'task:unshared': refreshTasks,
-      'tasks:refresh': refreshTasks
+      'task:shared': fetchTasks,
+      'task:unshared': fetchTasks,
+      'tasks:refresh': fetchTasks
     };
 
     // Register all listeners
@@ -362,22 +295,14 @@ export const useTasks = () => {
     return () => {
       Object.keys(handlers).forEach(event => socket.off(event));
     };
-  }, [socket]);
+  }, [socket, fetchTasks, removeFromDateBuckets, updateTaskInBuckets]);
 
   useEffect(() => {
-    if (user && user.id && user.token) {
+    if (user?.id && user?.token) {
       fetchTasks();
     } else {
-      setTasks({
-        today: [],
-        tomorrow: [],
-        dayAfterTomorrow: []
-      });
-      setDates({
-        today: '',
-        tomorrow: '',
-        dayAfterTomorrow: ''
-      });
+      setTasks(EMPTY_TASKS_STATE);
+      setDates({ today: '', tomorrow: '', dayAfterTomorrow: '' });
       setArchivedTasks([]);
     }
   }, [user, fetchTasks]);
