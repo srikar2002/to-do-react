@@ -3,7 +3,6 @@ const Task = require('../models/Task');
 const User = require('../models/User');
 const { verifyToken } = require('../middleware/auth');
 const dayjs = require('dayjs');
-const { sendTaskCreationEmail } = require('../utils/emailService');
 const { emitTaskUpdate, emitTaskDelete, emitTaskRefresh } = require('../websocket/socketServer');
 const { createEventFromTask, getValidAccessToken } = require('../utils/googleCalendarService');
 
@@ -202,27 +201,13 @@ router.post('/', async (req, res) => {
     // Emit WebSocket event for real-time sync
     emitTaskUpdate('task:created', task, [req.userId]);
     
-    // Send email notification if enabled (don't block response if email fails)
+    // Create Google Calendar event if enabled (don't block response if it fails)
     try {
       const user = await User.findById(req.userId);
-      if (user && user.emailNotificationsEnabled) {
-        // Send email asynchronously - don't wait for it
-        sendTaskCreationEmail(
-          user.email,
-          user.name,
-          task.title,
-          task.date,
-          task.description
-        ).catch(err => {
-          console.error('Failed to send task creation email:', err);
-        });
-      }
-
-      // Create Google Calendar event if enabled (don't block response if it fails)
       createCalendarEventForTask(user, task);
-    } catch (emailError) {
+    } catch (error) {
       // Log error but don't fail the task creation
-      console.error('Error checking notification preferences:', emailError);
+      console.error('Error creating calendar event:', error);
     }
     
     res.status(201).json({

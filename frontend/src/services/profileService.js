@@ -105,29 +105,4 @@ export const updateTimezone = async (timezone, token) => {
   }
 };
 
-/**
- * Update email notification preference
- * @param {boolean} emailNotificationsEnabled - Whether email notifications are enabled
- * @param {string} token - User authentication token
- * @returns {Promise<{success: boolean, user?: object, message?: string}>}
- */
-export const updateNotificationPreference = async (emailNotificationsEnabled, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
-  try {
-    const response = await axios.patch('/api/auth/preferences/notifications', 
-      { emailNotificationsEnabled }, 
-      { headers: { 'Authorization': `Bearer ${token}` } }
-    );
-    return { success: true, user: response.data.user };
-  } catch (error) {
-    console.error('Error updating notification preference:', error);
-    return { 
-      success: false, 
-      message: error.response?.data?.message || 'Failed to update notification preference' 
-    };
-  }
-};
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Container, Typography, Box, Button, FormControl, InputLabel, Select, MenuItem, Card, CardContent, Alert, CircularProgress, Avatar, Switch, FormControlLabel } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon, Notifications as NotificationsIcon, CalendarToday as CalendarIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Person as PersonIcon, Email as EmailIcon, CalendarToday as CalendarIcon, CheckCircle as CheckCircleIcon, Cancel as CancelIcon } from '@mui/icons-material';
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import { getProfileStyles } from '../styles/profileStyles';
@@ -9,8 +9,7 @@ import {
   checkCalendarStatus as checkCalendarStatusService,
   connectCalendar,
   disconnectCalendar,
-  updateTimezone,
-  updateNotificationPreference
+  updateTimezone
 } from '../services/profileService';
 
 const TIMEZONES = [
@@ -26,23 +25,18 @@ const Profile = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [timezone, setTimezone] = useState(user?.timezone || 'Asia/Kolkata');
-  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(user?.emailNotificationsEnabled || false);
   const [loading, setLoading] = useState(false);
-  const [notificationLoading, setNotificationLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [calendarConnected, setCalendarConnected] = useState(false);
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [checkingCalendar, setCheckingCalendar] = useState(true);
 
-  // Update timezone and notifications when user data changes
+  // Update timezone when user data changes
   useEffect(() => {
     if (user?.timezone) {
       setTimezone(user.timezone);
       localStorage.setItem('userTimezone', user.timezone);
-    }
-    if (user?.emailNotificationsEnabled !== undefined) {
-      setEmailNotificationsEnabled(user.emailNotificationsEnabled);
     }
   }, [user]);
 
@@ -145,30 +139,6 @@ const Profile = () => {
     setLoading(false);
   };
 
-  const handleNotificationToggle = async (e) => {
-    const enabled = e.target.checked;
-    setEmailNotificationsEnabled(enabled);
-    setError('');
-    setSuccess('');
-    setNotificationLoading(true);
-
-    const result = await updateNotificationPreference(enabled, user?.token);
-    
-    if (result.success && result.user) {
-      // Update user in context and localStorage (preserve token)
-      const updatedUser = { ...result.user, token: user?.token };
-      setUser(updatedUser);
-      localStorage.setItem('user', JSON.stringify(result.user));
-      
-      setSuccess(`Email notifications ${enabled ? 'enabled' : 'disabled'} successfully!`);
-    } else {
-      setError(result.message || 'Failed to update notification preference');
-      // Revert to previous state on error
-      setEmailNotificationsEnabled(user?.emailNotificationsEnabled || false);
-    }
-    
-    setNotificationLoading(false);
-  };
 
   const styles = getProfileStyles(darkMode);
 
@@ -241,29 +211,6 @@ const Profile = () => {
               ))}
             </Select>
           </FormControl>
-
-          {/* Email Notifications Toggle */}
-          <Box sx={styles.notificationBox}>
-            <NotificationsIcon color="action" />
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={emailNotificationsEnabled}
-                  onChange={handleNotificationToggle}
-                  disabled={notificationLoading}
-                />
-              }
-              label={
-                <Box>
-                  <Typography variant="body1">Email Notifications</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Receive email notifications when tasks are created
-                  </Typography>
-                </Box>
-              }
-            />
-            {notificationLoading && <CircularProgress size={20} />}
-          </Box>
 
           {/* Google Calendar Integration */}
           <Box sx={styles.calendarSection}>
