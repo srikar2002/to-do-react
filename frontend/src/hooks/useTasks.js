@@ -26,7 +26,7 @@ const EMPTY_TASKS_STATE = {
 
 /**
  * Custom hook to manage tasks state and operations
- * Replaces TaskContext functionality
+ * Uses taskService for all API calls - no token passing needed (uses axios defaults)
  */
 export const useTasks = () => {
   const { user } = useAuth();
@@ -63,14 +63,6 @@ export const useTasks = () => {
     }));
   }, []);
 
-  // Helper: Check authentication
-  const checkAuth = useCallback(() => {
-    if (!user || !user.token) {
-      return { success: false, message: 'User not authenticated' };
-    }
-    return null;
-  }, [user]);
-
   // React 19: useOptimistic for immediate UI feedback when toggling task status
   const [optimisticTasks, setOptimisticTaskStatus] = useOptimistic(
     tasks,
@@ -89,13 +81,13 @@ export const useTasks = () => {
   );
 
   const fetchTasks = useCallback(async () => {
-    if (!user || !user.id || !user.token) {
+    if (!user?.id || !user?.token) {
       return;
     }
     
     setLoading(true);
     try {
-      const result = await fetchTasksService(user.token);
+      const result = await fetchTasksService();
       if (result.success && result.tasks && result.dates) {
         setTasks({
           today: result.tasks[result.dates.today] || [],
@@ -114,60 +106,66 @@ export const useTasks = () => {
     }
   }, [user]);
 
-  // Generic mutation wrapper
-  const withMutation = useCallback(async (serviceCall, refetchTasks = true) => {
-    const authError = checkAuth();
-    if (authError) return authError;
+  // Task mutation functions - directly call service and refetch on success
+  const createTask = useCallback(async (taskData) => {
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
+    const result = await createTaskService(taskData);
+    if (result.success) await fetchTasks();
+    return result;
+  }, [user, fetchTasks]);
+
+  const createRecurringTask = useCallback(async (taskData) => {
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
+    const result = await createRecurringTaskService(taskData);
+    if (result.success) await fetchTasks();
+    return result;
+  }, [user, fetchTasks]);
+
+  const updateTask = useCallback(async (taskId, taskData) => {
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
+    const result = await updateTaskService(taskId, taskData);
+    if (result.success) await fetchTasks();
+    return result;
+  }, [user, fetchTasks]);
+
+  const deleteTask = useCallback(async (taskId) => {
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
+    const result = await deleteTaskService(taskId);
+    if (result.success) await fetchTasks();
+    return result;
+  }, [user, fetchTasks]);
+
+  const fetchArchivedTasks = useCallback(async () => {
+    if (!user?.id || !user?.token) {
+      setArchivedTasks([]);
+      return;
+    }
     
-    const result = await serviceCall(user.token);
-    if (result.success && refetchTasks) {
-      await fetchTasks();
+    const result = await fetchArchivedTasksService();
+    setArchivedTasks(result.success 
+      ? (result.tasks || []).filter(task => !task.isRecurring)
+      : []
+    );
+  }, [user]);
+
+  const archiveTask = useCallback(async (taskId) => {
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
+    const result = await archiveTaskService(taskId);
+    if (result.success) {
+      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
     }
     return result;
-  }, [user, checkAuth, fetchTasks]);
-
-  // Generic mutation wrapper with multiple refetches
-  const withMultiMutation = useCallback(async (serviceCall, refetchFunctions) => {
-    const authError = checkAuth();
-    if (authError) return authError;
-    
-    const result = await serviceCall(user.token);
-    if (result.success && refetchFunctions) {
-      await Promise.all(refetchFunctions.map(fn => fn()));
-    }
-    return result;
-  }, [user, checkAuth]);
-
-  const createTask = useCallback((taskData) => 
-    withMutation(() => createTaskService(taskData, user.token))
-  , [user, withMutation]);
-
-  const createRecurringTask = useCallback((taskData) => 
-    withMutation(() => createRecurringTaskService(taskData, user.token))
-  , [user, withMutation]);
-
-  const updateTask = useCallback((taskId, taskData) => 
-    withMutation(() => updateTaskService(taskId, taskData, user.token))
-  , [user, withMutation]);
-
-  const deleteTask = useCallback((taskId) => 
-    withMutation(() => deleteTaskService(taskId, user.token))
-  , [user, withMutation]);
-
-  const archiveTask = useCallback((taskId) => 
-    withMutation(() => archiveTaskService(taskId, user.token))
-  , [user, withMutation]);
+  }, [user, fetchTasks, fetchArchivedTasks]);
 
   const toggleTaskStatus = useCallback(async (taskId, currentStatus) => {
-    const authError = checkAuth();
-    if (authError) return authError;
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
     
     // React 19: Optimistically update the UI immediately
     const newStatus = currentStatus === TaskStatus.PENDING ? TaskStatus.COMPLETED : TaskStatus.PENDING;
     setOptimisticTaskStatus({ taskId, newStatus });
     
     try {
-      const result = await toggleTaskStatusService(taskId, currentStatus, user.token);
+      const result = await toggleTaskStatusService(taskId, currentStatus);
       if (result.success && result.task) {
         updateTaskInBuckets(taskId, () => result.task);
       } else if (!result.success) {
@@ -181,47 +179,39 @@ export const useTasks = () => {
         message: error.response?.data?.message || 'Failed to toggle task status' 
       };
     }
-  }, [user, checkAuth, setOptimisticTaskStatus, updateTaskInBuckets, fetchTasks]);
+  }, [user, setOptimisticTaskStatus, updateTaskInBuckets, fetchTasks]);
 
-  const fetchArchivedTasks = useCallback(async () => {
-    if (!user || !user.id || !user.token) {
-      setArchivedTasks([]);
-      return;
+  const restoreTask = useCallback(async (taskId) => {
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
+    const result = await restoreTaskService(taskId);
+    if (result.success) {
+      await Promise.all([fetchArchivedTasks(), fetchTasks()]);
     }
-    
-    const result = await fetchArchivedTasksService(user.token);
-    setArchivedTasks(result.success 
-      ? (result.tasks || []).filter(task => !task.isRecurring)
-      : []
-    );
-  }, [user]);
-
-  const restoreTask = useCallback((taskId) => 
-    withMultiMutation(
-      () => restoreTaskService(taskId, user.token),
-      [fetchArchivedTasks, fetchTasks]
-    )
-  , [user, withMultiMutation, fetchArchivedTasks, fetchTasks]);
+    return result;
+  }, [user, fetchArchivedTasks, fetchTasks]);
 
   const getUsers = useCallback(async (search = '') => {
-    const authError = checkAuth();
-    if (authError) return { ...authError, users: [] };
-    return await getUsersService(search, user.token);
-  }, [user, checkAuth]);
+    if (!user?.token) return { success: false, message: 'User not authenticated', users: [] };
+    return await getUsersService(search);
+  }, [user]);
 
-  const shareTask = useCallback((taskId, userIds) => 
-    withMultiMutation(
-      () => shareTaskService(taskId, userIds, user.token),
-      [fetchTasks, fetchArchivedTasks]
-    )
-  , [user, withMultiMutation, fetchTasks, fetchArchivedTasks]);
+  const shareTask = useCallback(async (taskId, userIds) => {
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
+    const result = await shareTaskService(taskId, userIds);
+    if (result.success) {
+      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
+    }
+    return result;
+  }, [user, fetchTasks, fetchArchivedTasks]);
 
-  const unshareTask = useCallback((taskId, userId) => 
-    withMultiMutation(
-      () => unshareTaskService(taskId, userId, user.token),
-      [fetchTasks, fetchArchivedTasks]
-    )
-  , [user, withMultiMutation, fetchTasks, fetchArchivedTasks]);
+  const unshareTask = useCallback(async (taskId, userId) => {
+    if (!user?.token) return { success: false, message: 'User not authenticated' };
+    const result = await unshareTaskService(taskId, userId);
+    if (result.success) {
+      await Promise.all([fetchTasks(), fetchArchivedTasks()]);
+    }
+    return result;
+  }, [user, fetchTasks, fetchArchivedTasks]);
 
   // Set up WebSocket event listeners for real-time updates
   useEffect(() => {

@@ -4,22 +4,16 @@ import { TaskStatus } from '../constants/enums';
 /**
  * Task Service
  * Handles all task-related API calls
+ * Uses axios default headers set in AuthContext for authentication
  */
 
 /**
  * Fetch tasks for the current user
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, tasks?: object, dates?: object, message?: string}>}
  */
-export const fetchTasks = async (token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const fetchTasks = async () => {
   try {
-    const response = await axios.get('/api/tasks', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.get('/api/tasks');
     return { 
       success: true, 
       tasks: response.data.tasks,
@@ -37,18 +31,11 @@ export const fetchTasks = async (token) => {
 /**
  * Create a new task
  * @param {object} taskData - Task data to create
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, task?: object, message?: string}>}
  */
-export const createTask = async (taskData, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const createTask = async (taskData) => {
   try {
-    const response = await axios.post('/api/tasks', taskData, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.post('/api/tasks', taskData);
     return { success: true, task: response.data.task };
   } catch (error) {
     console.error('Error creating task:', error);
@@ -62,18 +49,11 @@ export const createTask = async (taskData, token) => {
 /**
  * Create a recurring task
  * @param {object} taskData - Task data for recurring task
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, tasks?: array, count?: number, message?: string}>}
  */
-export const createRecurringTask = async (taskData, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const createRecurringTask = async (taskData) => {
   try {
-    const response = await axios.post('/api/tasks/recurring', taskData, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.post('/api/tasks/recurring', taskData);
     return { 
       success: true, 
       tasks: response.data.tasks,
@@ -91,18 +71,11 @@ export const createRecurringTask = async (taskData, token) => {
 /**
  * Archive a task
  * @param {string} taskId - Task ID to archive
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, task?: object, message?: string}>}
  */
-export const archiveTask = async (taskId, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const archiveTask = async (taskId) => {
   try {
-    const response = await axios.post(`/api/tasks/${taskId}/archive`, {}, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.post(`/api/tasks/${taskId}/archive`);
     return { success: true, task: response.data.task };
   } catch (error) {
     console.error('Error archiving task:', error);
@@ -115,18 +88,11 @@ export const archiveTask = async (taskId, token) => {
 
 /**
  * Fetch archived tasks for the current user
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, tasks?: array, message?: string}>}
  */
-export const fetchArchivedTasks = async (token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided', tasks: [] };
-  }
-
+export const fetchArchivedTasks = async () => {
   try {
-    const response = await axios.get('/api/tasks/archived', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.get('/api/tasks/archived');
     return { success: true, tasks: response.data.tasks || [] };
   } catch (error) {
     console.error('Error fetching archived tasks:', error);
@@ -142,18 +108,11 @@ export const fetchArchivedTasks = async (token) => {
  * Update a task
  * @param {string} taskId - Task ID to update
  * @param {object} taskData - Task data to update
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, task?: object, message?: string}>}
  */
-export const updateTask = async (taskId, taskData, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const updateTask = async (taskId, taskData) => {
   try {
-    const response = await axios.put(`/api/tasks/${taskId}`, taskData, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.put(`/api/tasks/${taskId}`, taskData);
     return { success: true, task: response.data.task };
   } catch (error) {
     console.error('Error updating task:', error);
@@ -167,18 +126,11 @@ export const updateTask = async (taskId, taskData, token) => {
 /**
  * Delete a task
  * @param {string} taskId - Task ID to delete
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, message?: string}>}
  */
-export const deleteTask = async (taskId, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const deleteTask = async (taskId) => {
   try {
-    await axios.delete(`/api/tasks/${taskId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    await axios.delete(`/api/tasks/${taskId}`);
     return { success: true };
   } catch (error) {
     console.error('Error deleting task:', error);
@@ -192,18 +144,11 @@ export const deleteTask = async (taskId, token) => {
 /**
  * Restore an archived task
  * @param {string} taskId - Task ID to restore
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, task?: object, message?: string}>}
  */
-export const restoreTask = async (taskId, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const restoreTask = async (taskId) => {
   try {
-    const response = await axios.post(`/api/tasks/${taskId}/restore`, {}, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.post(`/api/tasks/${taskId}/restore`);
     return { success: true, task: response.data.task };
   } catch (error) {
     console.error('Error restoring task:', error);
@@ -217,20 +162,12 @@ export const restoreTask = async (taskId, token) => {
 /**
  * Get users for task sharing
  * @param {string} search - Search query for users
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, users?: array, message?: string}>}
  */
-export const getUsers = async (search = '', token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided', users: [] };
-  }
-
+export const getUsers = async (search = '') => {
   try {
     const params = search ? { params: { search } } : {};
-    const response = await axios.get('/api/tasks/users', {
-      ...params,
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.get('/api/tasks/users', params);
     return { success: true, users: response.data.users || [] };
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -246,18 +183,11 @@ export const getUsers = async (search = '', token) => {
  * Share a task with users
  * @param {string} taskId - Task ID to share
  * @param {array} userIds - Array of user IDs to share with
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, task?: object, message?: string}>}
  */
-export const shareTask = async (taskId, userIds, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const shareTask = async (taskId, userIds) => {
   try {
-    const response = await axios.post(`/api/tasks/${taskId}/share`, { userIds }, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.post(`/api/tasks/${taskId}/share`, { userIds });
     return { success: true, task: response.data.task };
   } catch (error) {
     console.error('Error sharing task:', error);
@@ -272,18 +202,11 @@ export const shareTask = async (taskId, userIds, token) => {
  * Unshare a task from a user
  * @param {string} taskId - Task ID to unshare
  * @param {string} userId - User ID to unshare from
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, task?: object, message?: string}>}
  */
-export const unshareTask = async (taskId, userId, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const unshareTask = async (taskId, userId) => {
   try {
-    const response = await axios.delete(`/api/tasks/${taskId}/share/${userId}`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const response = await axios.delete(`/api/tasks/${taskId}/share/${userId}`);
     return { success: true, task: response.data.task };
   } catch (error) {
     console.error('Error unsharing task:', error);
@@ -298,19 +221,13 @@ export const unshareTask = async (taskId, userId, token) => {
  * Toggle task status between PENDING and COMPLETED
  * @param {string} taskId - Task ID to toggle
  * @param {string} currentStatus - Current task status
- * @param {string} token - User authentication token
  * @returns {Promise<{success: boolean, task?: object, message?: string}>}
  */
-export const toggleTaskStatus = async (taskId, currentStatus, token) => {
-  if (!token) {
-    return { success: false, message: 'No authentication token provided' };
-  }
-
+export const toggleTaskStatus = async (taskId, currentStatus) => {
   const newStatus = currentStatus === TaskStatus.PENDING ? TaskStatus.COMPLETED : TaskStatus.PENDING;
   
   try {
-    const result = await updateTask(taskId, { status: newStatus }, token);
-    return result;
+    return await updateTask(taskId, { status: newStatus });
   } catch (error) {
     console.error('Error toggling task status:', error);
     return { 
