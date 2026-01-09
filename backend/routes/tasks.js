@@ -11,8 +11,10 @@ const router = express.Router();
 // Rollover all users' tasks (for scheduled job) - must be before auth middleware
 router.post('/rollover-all', async (req, res) => {
   try {
-    const today = dayjs().format('YYYY-MM-DD');
-    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
+    // Use UTC to ensure consistency with scheduler (runs at midnight UTC)
+    // Get current UTC date string (toISOString() always returns UTC)
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = dayjs(today).add(1, 'day').format('YYYY-MM-DD');
     
     // Find all pending tasks from today for all users with rollover enabled (excluding archived)
     const tasksToRollover = await Task.find({
@@ -20,7 +22,7 @@ router.post('/rollover-all', async (req, res) => {
       status: 'Pending',
       rollover: true,
       archived: false
-    });
+    }).populate('userId', '_id').populate('sharedWith', '_id');
     
     if (tasksToRollover.length === 0) {
       return res.json({ 
@@ -28,6 +30,23 @@ router.post('/rollover-all', async (req, res) => {
         rolledOverCount: 0 
       });
     }
+    
+    // Collect all affected user IDs and task IDs before updating
+    const affectedUserIds = new Set();
+    const taskIdsToRollover = [];
+    tasksToRollover.forEach(task => {
+      taskIdsToRollover.push(task._id.toString());
+      if (task.userId?._id) {
+        affectedUserIds.add(task.userId._id.toString());
+      }
+      if (task.sharedWith && Array.isArray(task.sharedWith)) {
+        task.sharedWith.forEach(user => {
+          if (user?._id) {
+            affectedUserIds.add(user._id.toString());
+          }
+        });
+      }
+    });
     
     // Update all pending tasks with rollover enabled to tomorrow's date (excluding archived)
     const updateResult = await Task.updateMany(
@@ -41,6 +60,27 @@ router.post('/rollover-all', async (req, res) => {
         $set: { date: tomorrow }
       }
     );
+    
+    // Fetch only the tasks we just rolled over (by their IDs) to emit WebSocket events
+    const updatedTasks = await Task.find({
+      _id: { $in: taskIdsToRollover }
+    }).populate('userId', 'name email').populate('sharedWith', 'name email');
+    
+    // Emit WebSocket events to notify all affected users
+    updatedTasks.forEach(task => {
+      const taskUserIds = [task.userId?._id?.toString()].filter(Boolean);
+      if (task.sharedWith && Array.isArray(task.sharedWith)) {
+        task.sharedWith.forEach(user => {
+          if (user?._id) {
+            taskUserIds.push(user._id.toString());
+          }
+        });
+      }
+      emitTaskUpdate('task:updated', task, taskUserIds);
+    });
+    
+    // Also emit a refresh event to ensure all affected users get updated task lists
+    emitTaskRefresh(Array.from(affectedUserIds));
     
     res.json({
       message: `Successfully rolled over ${updateResult.modifiedCount} tasks to tomorrow for all users`,
@@ -119,9 +159,11 @@ const createCalendarEventForTask = async (user, task) => {
 // Get tasks for 3-day window (Today, Tomorrow, Day After Tomorrow)
 router.get('/', async (req, res) => {
   try {
-    const today = dayjs().format('YYYY-MM-DD');
-    const tomorrow = dayjs().add(1, 'day').format('YYYY-MM-DD');
-    const dayAfterTomorrow = dayjs().add(2, 'day').format('YYYY-MM-DD');
+    // Use UTC dates to ensure consistency with rollover logic
+    // Get current UTC date string (toISOString() always returns UTC)
+    const today = new Date().toISOString().split('T')[0];
+    const tomorrow = dayjs(today).add(1, 'day').format('YYYY-MM-DD');
+    const dayAfterTomorrow = dayjs(today).add(2, 'day').format('YYYY-MM-DD');
     
     // Get tasks owned by user OR shared with user
     const tasks = await Task.find({
