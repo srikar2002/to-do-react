@@ -56,12 +56,10 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
   const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [selectedUserIds, setSelectedUserIds] = useState([]);
-  const [selectedUsers, setSelectedUsers] = useState([]); // Store full user objects for selected users
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [unsharingUserId, setUnsharingUserId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchTimeout, setSearchTimeout] = useState(null);
   const { getUsers, shareTask, unshareTask } = useTasks();
   const { user: currentUser } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
@@ -105,12 +103,9 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
 
   useEffect(() => {
     if (shareDialogOpen && isOwner) {
-      // Initialize - don't pre-select already shared users for adding
-      // They will be shown in the "Currently Shared With" section
       setSelectedUserIds([]);
-      setSelectedUsers([]);
-      setUsers([]); // Clear users when dialog opens
-      setSearchQuery(''); // Reset search
+      setUsers([]);
+      setSearchQuery('');
     }
   }, [shareDialogOpen, isOwner]);
 
@@ -118,28 +113,14 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
   useEffect(() => {
     if (!shareDialogOpen || !isOwner) return;
     
-    // Clear previous timeout
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-    
-    // Only search if there's a query (at least 1 character)
     if (!searchQuery.trim()) {
-      setUsers([]); // Clear users if search is empty
+      setUsers([]);
       setLoadingUsers(false);
       return;
     }
     
-    // Set new timeout for debounced search
-    const timeout = setTimeout(() => {
-      loadUsers(searchQuery.trim());
-    }, 300); // 300ms debounce
-    
-    setSearchTimeout(timeout);
-    
-    return () => {
-      if (timeout) clearTimeout(timeout);
-    };
+    const timeout = setTimeout(() => loadUsers(searchQuery.trim()), 300);
+    return () => clearTimeout(timeout);
   }, [searchQuery, shareDialogOpen, isOwner]);
 
   const loadUsers = async (search = '') => {
@@ -154,50 +135,42 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
     setLoadingUsers(false);
   };
 
-  const handleOpenShareDialog = () => {
-    setShareDialogOpen(true);
-  };
-
   const handleCloseShareDialog = () => {
     setShareDialogOpen(false);
     setSelectedUserIds([]);
-    setSelectedUsers([]);
     setSearchQuery('');
   };
 
   const handleToggleUser = (userId) => {
-    const user = users.find(u => normalizeId(u) === userId);
-    setSelectedUserIds(prev => {
-      if (prev.includes(userId)) {
-        // Remove user
-        setSelectedUsers(prevUsers => prevUsers.filter(u => normalizeId(u) !== userId));
-        return prev.filter(id => id !== userId);
-      } else {
-        // Add user - check if already exists to prevent duplicates
-        if (user) {
-          setSelectedUsers(prevUsers => {
-            // Check if user is already in the array
-            const alreadyExists = prevUsers.some(u => normalizeId(u) === userId);
-            if (alreadyExists) {
-              return prevUsers; // Don't add duplicate
-            }
-            return [...prevUsers, user];
-          });
-        }
-        return [...prev, userId];
-      }
-    });
+    setSelectedUserIds(prev => 
+      prev.includes(userId) 
+        ? prev.filter(id => id !== userId)
+        : [...prev, userId]
+    );
   };
 
   const handleRemoveSelectedUser = (userId) => {
     setSelectedUserIds(prev => prev.filter(id => id !== userId));
-    setSelectedUsers(prevUsers => prevUsers.filter(u => normalizeId(u) !== userId));
   };
 
+  // Helper: Get user data by ID
+  const getUserData = (userId) => {
+    return users.find(u => normalizeId(u) === userId) || 
+           task.sharedWith?.find(su => normalizeId(su) === userId);
+  };
+
+  // Helper: Check if user is already shared
+  const isAlreadyShared = (userId) => {
+    return task.sharedWith?.some(su => normalizeId(su) === userId) || false;
+  };
+
+  // Get selected users from selectedUserIds
+  const selectedUsers = selectedUserIds
+    .map(id => users.find(u => normalizeId(u) === id))
+    .filter(Boolean);
+
   const handleShare = async () => {
-    // Filter out users that are already shared
-    const alreadySharedIds = task.sharedWith?.map(normalizeId) || [];
-    const newUserIds = selectedUserIds.filter(id => !alreadySharedIds.includes(id));
+    const newUserIds = selectedUserIds.filter(id => !isAlreadyShared(id));
     
     if (newUserIds.length === 0) {
       enqueueSnackbar('Please select at least one new user to share with', { variant: 'warning' });
@@ -206,25 +179,25 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
     
     setSharing(true);
     const result = await shareTask(task._id, newUserIds);
-    if (result.success) {
-      enqueueSnackbar('Task shared successfully', { variant: 'success' });
-      handleCloseShareDialog();
-    } else {
-      enqueueSnackbar(result.message || 'Failed to share task', { variant: 'error' });
-    }
+    enqueueSnackbar(
+      result.success 
+        ? 'Task shared successfully' 
+        : (result.message || 'Failed to share task'),
+      { variant: result.success ? 'success' : 'error' }
+    );
+    if (result.success) handleCloseShareDialog();
     setSharing(false);
   };
 
   const handleUnshare = async (userId) => {
     setUnsharingUserId(userId);
     const result = await unshareTask(task._id, userId);
-    if (result.success) {
-      enqueueSnackbar('User removed from shared task', { variant: 'success' });
-      // Reload users to update the list
-      await loadUsers();
-    } else {
-      enqueueSnackbar(result.message || 'Failed to unshare task', { variant: 'error' });
-    }
+    enqueueSnackbar(
+      result.success 
+        ? 'User removed from shared task' 
+        : (result.message || 'Failed to unshare task'),
+      { variant: result.success ? 'success' : 'error' }
+    );
     setUnsharingUserId(null);
   };
 
@@ -478,7 +451,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                   size="small" 
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleOpenShareDialog();
+                    setShareDialogOpen(true);
                   }} 
                   color="primary"
                   sx={styles.shareIconButton}
@@ -520,16 +493,12 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
               <List>
                 {task.sharedWith.map((sharedUser) => {
                   const sharedUserId = normalizeId(sharedUser);
-                  const sharedUserData = typeof sharedUser === 'object' ? sharedUser : 
-                    users.find(u => normalizeId(u) === sharedUserId) ||
-                    selectedUsers.find(u => normalizeId(u) === sharedUserId);
-                  const userName = sharedUserData?.name || 'Unknown User';
-                  const userEmail = sharedUserData?.email || '';
+                  const sharedUserData = typeof sharedUser === 'object' ? sharedUser : getUserData(sharedUserId);
                   return (
                     <ListItem key={sharedUserId} disablePadding>
                       <ListItemText 
-                        primary={userName} 
-                        secondary={userEmail}
+                        primary={sharedUserData?.name || 'Unknown User'} 
+                        secondary={sharedUserData?.email || ''}
                         sx={styles.shareDialogList}
                       />
                       <ListItemSecondaryAction>
@@ -566,18 +535,11 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
               <Box sx={styles.shareDialogSelectedBox}>
                 {selectedUsers
                   .filter((user, index, self) => {
-                    // Remove duplicates by checking if this is the first occurrence of this userId
                     const userId = normalizeId(user);
-                    return index === self.findIndex(u => normalizeId(u) === userId);
+                    return index === self.findIndex(u => normalizeId(u) === userId) && !isAlreadyShared(userId);
                   })
                   .map((user) => {
                     const userId = normalizeId(user);
-                    // Don't show users that are already shared
-                    const isAlreadyShared = task.sharedWith?.some(
-                      su => normalizeId(su) === userId
-                    );
-                    if (isAlreadyShared) return null;
-                    
                     return (
                       <Chip
                         key={userId}
@@ -628,24 +590,19 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                     : 'Type in the search box above to find users'}
                 </Typography>
               ) : (
-                users.map((user) => {
-                  const userId = normalizeId(user);
-                  const isSelected = selectedUserIds.includes(userId);
-                  // Don't show users that are already shared
-                  const isAlreadyShared = task.sharedWith?.some(
-                    su => normalizeId(su) === userId
-                  );
-                  if (isAlreadyShared) return null;
-                  
-                  return (
-                    <ListItem key={userId} disablePadding>
-                      <ListItemButton onClick={() => handleToggleUser(userId)}>
-                        <Checkbox checked={isSelected} />
-                        <ListItemText primary={user.name} secondary={user.email} />
-                      </ListItemButton>
-                    </ListItem>
-                  );
-                })
+                users
+                  .filter(user => !isAlreadyShared(normalizeId(user)))
+                  .map((user) => {
+                    const userId = normalizeId(user);
+                    return (
+                      <ListItem key={userId} disablePadding>
+                        <ListItemButton onClick={() => handleToggleUser(userId)}>
+                          <Checkbox checked={selectedUserIds.includes(userId)} />
+                          <ListItemText primary={user.name} secondary={user.email} />
+                        </ListItemButton>
+                      </ListItem>
+                    );
+                  })
               )}
             </List>
           )}
