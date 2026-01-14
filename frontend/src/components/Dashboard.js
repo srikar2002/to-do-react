@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import {
@@ -28,23 +28,17 @@ import {
   Tabs,
   Tab,
   FormControlLabel,
-  Switch,
-  Divider
+  Switch
 } from '@mui/material';
 import {
   Add as AddIcon,
   Logout as LogoutIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  CheckCircle as CheckCircleIcon,
-  RadioButtonUnchecked as RadioButtonUncheckedIcon,
   Close as CloseIcon,
   Brightness4 as Brightness4Icon,
   Brightness7 as Brightness7Icon,
   Person as PersonIcon,
   ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-  Today as TodayIcon
+  ChevronRight as ChevronRightIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import {
@@ -105,6 +99,22 @@ import {
   handleTaskToggleStatus
 } from '../services/dashboardService';
 
+// Initial form data constant
+const INITIAL_FORM_DATA = {
+  title: '',
+  description: '',
+  date: DefaultValues.DATE,
+  status: DefaultValues.STATUS,
+  priority: DefaultValues.PRIORITY,
+  tags: [],
+  isRecurring: false,
+  recurrencePattern: 'daily',
+  recurrenceInterval: 1,
+  recurrenceEndDate: ''
+};
+
+const INITIAL_ERRORS = { title: '', recurrenceInterval: '' };
+
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const { tasks, dates, archivedTasks, loading, createTask, createRecurringTask, updateTask, deleteTask, toggleTaskStatus, archiveTask, restoreTask, fetchArchivedTasks } = useTasks();
@@ -114,23 +124,9 @@ const Dashboard = () => {
   
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    date: DefaultValues.DATE,
-    status: DefaultValues.STATUS,
-    priority: DefaultValues.PRIORITY,
-    tags: [],
-    isRecurring: false,
-    recurrencePattern: 'daily',
-    recurrenceInterval: 1,
-    recurrenceEndDate: ''
-  });
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA);
   const [tagInput, setTagInput] = useState('');
-  const [errors, setErrors] = useState({
-    title: '',
-    recurrenceInterval: ''
-  });
+  const [errors, setErrors] = useState(INITIAL_ERRORS);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState(null);
   const [currentTab, setCurrentTab] = useState(0);
@@ -149,72 +145,44 @@ const Dashboard = () => {
     })
   );
 
-  const handleOpenDialog = (task = null, isRecurring = false) => {
+  const resetForm = useCallback((isRecurring = false) => {
+    setFormData({ ...INITIAL_FORM_DATA, isRecurring });
+    setTagInput('');
+    setErrors(INITIAL_ERRORS);
+  }, []);
+
+  const handleOpenDialog = useCallback((task = null, isRecurring = false) => {
     if (task) {
       const editCheck = canEditTask(task);
       if (!editCheck.canEdit) {
         enqueueSnackbar(editCheck.reason, { variant: 'warning' });
         return;
       }
-      
       setEditingTask(task);
-      const dateOption = convertTaskDateToOption(task.date);
-      
       setFormData({
+        ...INITIAL_FORM_DATA,
         title: task.title,
         description: task.description,
-        date: dateOption,
+        date: convertTaskDateToOption(task.date),
         status: task.status,
         priority: task.priority || DefaultValues.PRIORITY,
-        tags: task.tags || [],
-        isRecurring: false, // Can't edit recurring tasks as recurring
-        recurrencePattern: 'daily',
-        recurrenceInterval: 1,
-        recurrenceEndDate: ''
+        tags: task.tags || []
       });
     } else {
       setEditingTask(null);
-      setFormData({
-        title: '',
-        description: '',
-        date: DefaultValues.DATE,
-        status: DefaultValues.STATUS,
-        priority: DefaultValues.PRIORITY,
-        tags: [],
-        isRecurring: isRecurring,
-        recurrencePattern: 'daily',
-        recurrenceInterval: 1,
-        recurrenceEndDate: ''
-      });
-      setTagInput('');
+      resetForm(isRecurring);
     }
-    setErrors({ title: '', recurrenceInterval: '' });
     setOpenDialog(true);
-  };
+  }, [enqueueSnackbar, resetForm]);
 
-  const handleCloseDialog = () => {
+  const handleCloseDialog = useCallback(() => {
     setOpenDialog(false);
     setEditingTask(null);
-    setFormData({
-      title: '',
-      description: '',
-      date: DefaultValues.DATE,
-      status: DefaultValues.STATUS,
-      priority: DefaultValues.PRIORITY,
-      tags: [],
-      isRecurring: false,
-      recurrencePattern: 'daily',
-      recurrenceInterval: 1,
-      recurrenceEndDate: ''
-    });
-    setTagInput('');
-    setErrors({ title: '', recurrenceInterval: '' });
-  };
+    resetForm();
+  }, [resetForm]);
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = useCallback(async (e) => {
     e.preventDefault();
-
-    // Validate form data
     const validation = validateTaskForm(formData);
     setErrors(validation.errors);
     
@@ -223,22 +191,20 @@ const Dashboard = () => {
       return;
     }
 
+    const isRecurring = formData.isRecurring && !editingTask;
+    const taskData = prepareTaskData(formData, isRecurring);
+    let result;
+
     if (editingTask) {
-      // Update existing task (can't be recurring when editing)
-      const taskData = prepareTaskData(formData, false);
-      
-      const result = await updateTask(editingTask._id, taskData);
+      result = await updateTask(editingTask._id, taskData);
       if (result.success) {
         handleCloseDialog();
         enqueueSnackbar(SuccessMessages.TASK_UPDATED, { variant: 'info' });
       } else {
         enqueueSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, { variant: 'error' });
       }
-    } else if (formData.isRecurring) {
-      // Create recurring task
-      const recurringTaskData = prepareTaskData(formData, true);
-
-      const result = await createRecurringTask(recurringTaskData);
+    } else if (isRecurring) {
+      result = await createRecurringTask(taskData);
       if (result.success) {
         handleCloseDialog();
         enqueueSnackbar(`Recurring task created successfully. Generated ${result.count || 0} task instances.`, { variant: 'success' });
@@ -246,10 +212,7 @@ const Dashboard = () => {
         enqueueSnackbar(result.message || 'Failed to create recurring task', { variant: 'error' });
       }
     } else {
-      // Create regular task
-      const taskData = prepareTaskData(formData, false);
-
-      const result = await createTask(taskData);
+      result = await createTask(taskData);
       if (result.success) {
         handleCloseDialog();
         enqueueSnackbar(SuccessMessages.TASK_CREATED, { variant: 'success' });
@@ -257,156 +220,102 @@ const Dashboard = () => {
         enqueueSnackbar(result.message || ErrorMessages.TASK_CREATE_FAILED, { variant: 'error' });
       }
     }
-  };
+  }, [formData, editingTask, enqueueSnackbar, updateTask, createRecurringTask, createTask, handleCloseDialog]);
 
-  const handleRequestDelete = (task) => {
+  const handleRequestDelete = useCallback((task) => {
     setTaskToDelete(task);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseDeleteDialog = () => {
+  const handleCloseDeleteDialog = useCallback(() => {
     setDeleteDialogOpen(false);
     setTaskToDelete(null);
-  };
+  }, []);
 
-  const handleConfirmDelete = async () => {
+  const handleConfirmDelete = useCallback(async () => {
     if (!taskToDelete) return;
     await handleTaskDelete(taskToDelete._id, deleteTask, enqueueSnackbar);
     handleCloseDeleteDialog();
-  };
+  }, [taskToDelete, deleteTask, enqueueSnackbar, handleCloseDeleteDialog]);
 
-  const handleToggleStatus = async (taskId, currentStatus) => {
-    await handleTaskToggleStatus(taskId, currentStatus, toggleTaskStatus);
-  };
+  const handleToggleStatus = useCallback((taskId, currentStatus) => {
+    handleTaskToggleStatus(taskId, currentStatus, toggleTaskStatus);
+  }, [toggleTaskStatus]);
 
-  const handleArchive = async (task) => {
-    await handleTaskArchive(task._id, archiveTask, fetchArchivedTasks, enqueueSnackbar);
-  };
+  const handleArchive = useCallback((task) => {
+    handleTaskArchive(task._id, archiveTask, fetchArchivedTasks, enqueueSnackbar);
+  }, [archiveTask, fetchArchivedTasks, enqueueSnackbar]);
 
-  const handleRestore = async (task) => {
-    await handleTaskRestore(task._id, restoreTask, fetchArchivedTasks, enqueueSnackbar, currentTab);
-  };
+  const handleRestore = useCallback((task) => {
+    handleTaskRestore(task._id, restoreTask, fetchArchivedTasks, enqueueSnackbar, currentTab);
+  }, [restoreTask, fetchArchivedTasks, enqueueSnackbar, currentTab]);
 
-  const handleTabChange = (event, newValue) => {
+  const allTasks = useMemo(() => [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow], [tasks]);
+
+  const handleTabChange = useCallback((event, newValue) => {
     setCurrentTab(newValue);
-    if (newValue === 1) {
-      // Fetch archived tasks when switching to archive tab
-      fetchArchivedTasks();
-    }
-  };
+    if (newValue === 1) fetchArchivedTasks();
+  }, [fetchArchivedTasks]);
 
-  const handleDragStart = (event) => {
-    const { active } = event;
-    const taskId = active.id;
-    // Find the task from all task lists
-    const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
-    const task = allTasks.find(t => t._id === taskId);
+  const handleDragStart = useCallback((event) => {
+    const task = allTasks.find(t => t._id === event.active.id);
     setActiveTask(task);
-  };
+  }, [allTasks]);
 
-  const handleDragEnd = async (event) => {
+  const handleDragEnd = useCallback(async (event) => {
     const { active, over } = event;
     setActiveTask(null);
-
     if (!over) return;
 
     const taskId = active.id;
     const sourceDate = active.data.current?.date;
-    
-    // Determine target date - could be from task data or column data
-    let targetDate = over.data.current?.date;
-    if (!targetDate) {
-      // Check if over.id is a date (column drop)
-      const validDates = [dates.today, dates.tomorrow, dates.dayAfterTomorrow];
-      if (validDates.includes(over.id)) {
-        targetDate = over.id;
-      } else {
-        // It's a task, get its date
-        const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
-        const targetTask = allTasks.find(t => t._id === over.id);
-        if (targetTask) {
-          targetDate = targetTask.date;
-        }
-      }
-    }
-
-    // Find the task
-    const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
     const task = allTasks.find(t => t._id === taskId);
     
-    if (!task) return;
+    if (!task || !canDragTask(task)) return;
 
-    // Prevent dragging completed or archived tasks
-    if (!canDragTask(task)) {
-      return;
+    // Determine target date
+    let targetDate = over.data.current?.date;
+    if (!targetDate) {
+      const validDates = [dates.today, dates.tomorrow, dates.dayAfterTomorrow];
+      targetDate = validDates.includes(over.id) 
+        ? over.id 
+        : allTasks.find(t => t._id === over.id)?.date;
     }
+    if (!targetDate || !isValidTargetDate(targetDate, dates)) return;
 
-    if (!targetDate) return;
+    const dateKey = getDateKey(targetDate, dates);
+    if (!dateKey) return;
 
-    // If dropped in the same column, handle reordering
+    // Same column: reorder
     if (sourceDate === targetDate) {
-      const dateKey = getDateKey(sourceDate, dates);
-      if (!dateKey) return;
-      
       const taskList = tasks[dateKey];
       const oldIndex = taskList.findIndex(t => t._id === taskId);
-      
-      // Check if dropped on another task or empty space
-      const targetTask = taskList.find(t => t._id === over.id);
-      let newIndex;
-      
-      if (targetTask) {
-        // Dropped on another task
-        newIndex = taskList.findIndex(t => t._id === over.id);
-      } else {
-        // Dropped on empty space in column, append to end
-        newIndex = taskList.length;
-      }
+      const newIndex = taskList.find(t => t._id === over.id) 
+        ? taskList.findIndex(t => t._id === over.id) 
+        : taskList.length;
 
       if (oldIndex !== newIndex && newIndex !== -1) {
         const newTaskList = arrayMove(taskList, oldIndex, newIndex);
-        // Update order for all tasks in the list
-        const updatePromises = newTaskList.map((t, index) => {
-          return updateTask(t._id, { order: index });
-        });
-        await Promise.all(updatePromises);
+        await Promise.all(newTaskList.map((t, index) => updateTask(t._id, { order: index })));
       }
       return;
     }
 
-    // If dropped in a different column, update the date and order
-    if (sourceDate !== targetDate) {
-      // Validate that targetDate is one of our three dates
-      if (isValidTargetDate(targetDate, dates)) {
-        // Get the target column's task list to determine the new order
-        const dateKey = getDateKey(targetDate, dates);
-        if (!dateKey) return;
-        
-        const targetTaskList = tasks[dateKey];
-        // Set order to append at the end of the target column
-        const newOrder = targetTaskList.length;
-        const result = await updateTask(taskId, { date: targetDate, order: newOrder });
-        if (result.success) {
-          enqueueSnackbar(SuccessMessages.TASK_UPDATED, { variant: 'info' });
-        } else {
-          enqueueSnackbar(result.message || ErrorMessages.TASK_UPDATE_FAILED, { variant: 'error' });
-        }
-      }
-    }
-  };
+    // Different column: update date
+    const result = await updateTask(taskId, { date: targetDate, order: tasks[dateKey].length });
+    enqueueSnackbar(
+      result.success ? SuccessMessages.TASK_UPDATED : (result.message || ErrorMessages.TASK_UPDATE_FAILED),
+      { variant: result.success ? 'info' : 'error' }
+    );
+  }, [allTasks, dates, tasks, updateTask, enqueueSnackbar]);
 
-  const handleDragCancel = () => {
-    setActiveTask(null);
-  };
+  const handleDragCancel = useCallback(() => setActiveTask(null), []);
 
   // Droppable CardContent component
   const DroppableCardContent = ({ date, children, sx }) => {
     const { setNodeRef, isOver } = useDroppable({
       id: date,
-      data: {
-        type: 'column',
-        date
-      }
+      data: { type: 'column', date }
     });
 
     return (
@@ -424,15 +333,50 @@ const Dashboard = () => {
     );
   };
 
+  // Date Column Component
+  const DateColumn = ({ dateKey, date, headerColor, emptyText }) => {
+    const taskList = tasks[dateKey] || [];
+    return (
+      <Grid item xs={12} md={4}>
+        <Card sx={styles.card}>
+          <CardHeader
+            title={getDayLabel(date)}
+            subheader={formatDate(date)}
+            sx={styles.cardHeader(headerColor)}
+          />
+          <SortableContext items={taskList.map(t => t._id)} strategy={verticalListSortingStrategy}>
+            <DroppableCardContent date={date} sx={styles.cardContent}>
+              {taskList.map((task) => (
+                <TaskCard
+                  key={task._id}
+                  id={task._id}
+                  task={task}
+                  date={date}
+                  onEdit={() => handleOpenDialog(task)}
+                  onDelete={() => handleRequestDelete(task)}
+                  onToggleStatus={() => handleToggleStatus(task._id, task.status)}
+                  onArchive={() => handleArchive(task)}
+                />
+              ))}
+              {taskList.length === 0 && (
+                <Typography variant="body2" color="text.secondary" sx={styles.emptyTaskText}>
+                  {emptyText}
+                </Typography>
+              )}
+            </DroppableCardContent>
+          </SortableContext>
+        </Card>
+      </Grid>
+    );
+  };
 
   // Weekly view helpers
-  const allTasks = [...tasks.today, ...tasks.tomorrow, ...tasks.dayAfterTomorrow];
   const weekDates = getWeekDates(weekStartDate);
   const today = dayjs().format('YYYY-MM-DD');
   
-  const handlePreviousWeek = () => setWeekStartDate(prev => navigateToPreviousWeek(prev));
-  const handleNextWeek = () => setWeekStartDate(prev => navigateToNextWeek(prev));
-  const handleTodayWeek = () => setWeekStartDate(navigateToCurrentWeek());
+  const handlePreviousWeek = useCallback(() => setWeekStartDate(prev => navigateToPreviousWeek(prev)), []);
+  const handleNextWeek = useCallback(() => setWeekStartDate(prev => navigateToNextWeek(prev)), []);
+  const handleTodayWeek = useCallback(() => setWeekStartDate(navigateToCurrentWeek()), []);
 
   const styles = getDashboardStyles(darkMode);
 
@@ -517,119 +461,24 @@ const Dashboard = () => {
             onDragCancel={handleDragCancel}
           >
             <Grid container spacing={3}>
-              {/* Today */}
-              <Grid item xs={12} md={4}>
-                <Card sx={styles.card}>
-                  <CardHeader
-                    title={getDayLabel(dates.today)}
-                    subheader={formatDate(dates.today)}
-                    sx={styles.cardHeader('#e3f2fd')}
-                  />
-                  <SortableContext
-                    items={tasks.today.map(task => task._id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <DroppableCardContent
-                      date={dates.today}
-                      sx={styles.cardContent}
-                    >
-                      {tasks.today.map((task) => (
-                        <TaskCard
-                          key={task._id}
-                          id={task._id}
-                          task={task}
-                          date={dates.today}
-                          onEdit={() => handleOpenDialog(task)}
-                          onDelete={() => handleRequestDelete(task)}
-                          onToggleStatus={() => handleToggleStatus(task._id, task.status)}
-                          onArchive={() => handleArchive(task)}
-                        />
-                      ))}
-                      {tasks.today.length === 0 && (
-                        <Typography variant="body2" color="text.secondary" sx={styles.emptyTaskText}>
-                          No tasks for today
-                        </Typography>
-                      )}
-                    </DroppableCardContent>
-                  </SortableContext>
-                </Card>
-              </Grid>
-
-              {/* Tomorrow */}
-              <Grid item xs={12} md={4}>
-                <Card sx={styles.card}>
-                  <CardHeader
-                    title={getDayLabel(dates.tomorrow)}
-                    subheader={formatDate(dates.tomorrow)}
-                    sx={styles.cardHeader('#f3e5f5')}
-                  />
-                  <SortableContext
-                    items={tasks.tomorrow.map(task => task._id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <DroppableCardContent
-                      date={dates.tomorrow}
-                      sx={styles.cardContent}
-                    >
-                      {tasks.tomorrow.map((task) => (
-                        <TaskCard
-                          key={task._id}
-                          id={task._id}
-                          task={task}
-                          date={dates.tomorrow}
-                          onEdit={() => handleOpenDialog(task)}
-                          onDelete={() => handleRequestDelete(task)}
-                          onToggleStatus={() => handleToggleStatus(task._id, task.status)}
-                          onArchive={() => handleArchive(task)}
-                        />
-                      ))}
-                      {tasks.tomorrow.length === 0 && (
-                        <Typography variant="body2" color="text.secondary" sx={styles.emptyTaskText}>
-                          No tasks for tomorrow
-                        </Typography>
-                      )}
-                    </DroppableCardContent>
-                  </SortableContext>
-                </Card>
-              </Grid>
-
-              {/* Day After Tomorrow */}
-              <Grid item xs={12} md={4}>
-                <Card sx={styles.card}>
-                  <CardHeader
-                    title={getDayLabel(dates.dayAfterTomorrow)}
-                    subheader={formatDate(dates.dayAfterTomorrow)}
-                    sx={styles.cardHeader('#e8f5e8')}
-                  />
-                  <SortableContext
-                    items={tasks.dayAfterTomorrow.map(task => task._id)}
-                    strategy={verticalListSortingStrategy}
-                  >
-                    <DroppableCardContent
-                      date={dates.dayAfterTomorrow}
-                      sx={styles.cardContent}
-                    >
-                      {tasks.dayAfterTomorrow.map((task) => (
-                        <TaskCard
-                          key={task._id}
-                          id={task._id}
-                          task={task}
-                          date={dates.dayAfterTomorrow}
-                          onEdit={() => handleOpenDialog(task)}
-                          onDelete={() => handleRequestDelete(task)}
-                          onToggleStatus={() => handleToggleStatus(task._id, task.status)}
-                          onArchive={() => handleArchive(task)}
-                        />
-                      ))}
-                      {tasks.dayAfterTomorrow.length === 0 && (
-                        <Typography variant="body2" color="text.secondary" sx={styles.emptyTaskText}>
-                          No tasks for day after tomorrow
-                        </Typography>
-                      )}
-                    </DroppableCardContent>
-                  </SortableContext>
-                </Card>
-              </Grid>
+              <DateColumn
+                dateKey="today"
+                date={dates.today}
+                headerColor="#e3f2fd"
+                emptyText="No tasks for today"
+              />
+              <DateColumn
+                dateKey="tomorrow"
+                date={dates.tomorrow}
+                headerColor="#f3e5f5"
+                emptyText="No tasks for tomorrow"
+              />
+              <DateColumn
+                dateKey="dayAfterTomorrow"
+                date={dates.dayAfterTomorrow}
+                headerColor="#e8f5e8"
+                emptyText="No tasks for day after tomorrow"
+              />
 
               {/* Weekly Task View */}
               <Grid item xs={12}>
@@ -751,7 +600,7 @@ const Dashboard = () => {
                   control={
                     <Switch
                       checked={formData.isRecurring}
-                      onChange={(e) => setFormData({ ...formData, isRecurring: e.target.checked })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, isRecurring: e.target.checked }))}
                       color="primary"
                     />
                   }
@@ -769,9 +618,9 @@ const Dashboard = () => {
                 onChange={(e) => {
                   const next = e.target.value || '';
                   const capped = next.length > ValidationLimits.TITLE_MAX_LENGTH ? next.slice(0, ValidationLimits.TITLE_MAX_LENGTH) : next;
-                  setFormData({ ...formData, title: capped });
+                  setFormData(prev => ({ ...prev, title: capped }));
                   if (errors.title && capped.trim().length > 0 && capped.trim().length <= ValidationLimits.TITLE_MAX_LENGTH) {
-                    setErrors({ ...errors, title: '' });
+                    setErrors(prev => ({ ...prev, title: '' }));
                   }
                 }}
                 error={Boolean(errors.title) || (formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH && formData.title.length > 0)}
@@ -789,7 +638,7 @@ const Dashboard = () => {
                 onChange={(e) => {
                   const next = e.target.value || '';
                   const capped = next.length > ValidationLimits.DESCRIPTION_MAX_LENGTH ? next.slice(0, ValidationLimits.DESCRIPTION_MAX_LENGTH) : next;
-                  setFormData({ ...formData, description: capped });
+                  setFormData(prev => ({ ...prev, description: capped }));
                 }}
                 error={formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH && formData.description.length > 0}
                 helperText={formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH && formData.description.length > 0 ? ValidationMessages.DESCRIPTION_MAX_REACHED : ''}
@@ -801,7 +650,7 @@ const Dashboard = () => {
                   labelId="date-select-label"
                   value={formData.date}
                   label={formData.isRecurring ? 'Start Date' : 'Date'}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
                 >
                   <MenuItem value={DateOption.TODAY}>{DayLabels.TODAY}</MenuItem>
                   <MenuItem value={DateOption.TOMORROW}>{DayLabels.TOMORROW}</MenuItem>
@@ -816,7 +665,7 @@ const Dashboard = () => {
                       labelId="recurrence-pattern-select-label"
                       value={formData.recurrencePattern}
                       label="Recurrence Pattern"
-                      onChange={(e) => setFormData({ ...formData, recurrencePattern: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, recurrencePattern: e.target.value }))}
                     >
                       <MenuItem value="daily">Daily</MenuItem>
                       <MenuItem value="weekly">Weekly</MenuItem>
@@ -833,9 +682,9 @@ const Dashboard = () => {
                       value={formData.recurrenceInterval}
                       onChange={(e) => {
                         const value = parseInt(e.target.value) || 1;
-                        setFormData({ ...formData, recurrenceInterval: Math.max(1, value) });
+                        setFormData(prev => ({ ...prev, recurrenceInterval: Math.max(1, value) }));
                         if (errors.recurrenceInterval && value >= 1) {
-                          setErrors({ ...errors, recurrenceInterval: '' });
+                          setErrors(prev => ({ ...prev, recurrenceInterval: '' }));
                         }
                       }}
                       error={Boolean(errors.recurrenceInterval)}
@@ -851,10 +700,8 @@ const Dashboard = () => {
                     fullWidth
                     variant="outlined"
                     value={formData.recurrenceEndDate}
-                    onChange={(e) => setFormData({ ...formData, recurrenceEndDate: e.target.value })}
-                    InputLabelProps={{
-                      shrink: true,
-                    }}
+                    onChange={(e) => setFormData(prev => ({ ...prev, recurrenceEndDate: e.target.value }))}
+                    InputLabelProps={{ shrink: true }}
                     helperText="Leave empty to generate tasks for 90 days"
                     sx={styles.dialogTextField}
                   />
@@ -866,7 +713,7 @@ const Dashboard = () => {
                   labelId="priority-select-label"
                   value={formData.priority}
                   label="Priority"
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
                 >
                   <MenuItem value={TaskPriority.LOW}>{TaskPriority.LOW}</MenuItem>
                   <MenuItem value={TaskPriority.MEDIUM}>{TaskPriority.MEDIUM}</MenuItem>
@@ -885,7 +732,7 @@ const Dashboard = () => {
                     e.preventDefault();
                     const trimmedTag = tagInput.trim();
                     if (!formData.tags.includes(trimmedTag)) {
-                      setFormData({ ...formData, tags: [...formData.tags, trimmedTag] });
+                      setFormData(prev => ({ ...prev, tags: [...prev.tags, trimmedTag] }));
                     }
                     setTagInput('');
                   }
@@ -898,7 +745,7 @@ const Dashboard = () => {
                         onClick={() => {
                           const trimmedTag = tagInput.trim();
                           if (trimmedTag && !formData.tags.includes(trimmedTag)) {
-                            setFormData({ ...formData, tags: [...formData.tags, trimmedTag] });
+                            setFormData(prev => ({ ...prev, tags: [...prev.tags, trimmedTag] }));
                           }
                           setTagInput('');
                         }}
@@ -918,7 +765,7 @@ const Dashboard = () => {
                       label={tag}
                       size="small"
                       onDelete={() => {
-                        setFormData({ ...formData, tags: formData.tags.filter((_, i) => i !== index) });
+                        setFormData(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== index) }));
                       }}
                       deleteIcon={<CloseIcon />}
                       color="primary"
