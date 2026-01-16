@@ -1,6 +1,7 @@
 const https = require('https');
 const querystring = require('querystring');
 const url = require('url');
+const User = require('../models/User');
 
 /**
  * Google Calendar Service using native Node.js modules (no npm packages)
@@ -196,11 +197,14 @@ const getValidAccessToken = async (user, clientId, clientSecret) => {
       
       // Check if it's an invalid_grant error (token expired/revoked)
       if (error.errorCode === 'invalid_grant' || error.message.includes('invalid_grant')) {
-        // Clear invalid tokens and disable calendar integration
-        user.googleAccessToken = null;
-        user.googleRefreshToken = null;
-        user.googleCalendarEnabled = false;
-        await user.save();
+        // Clear invalid tokens and disable calendar integration (use findByIdAndUpdate to avoid parallel save errors)
+        await User.findByIdAndUpdate(user._id, {
+          $set: {
+            googleAccessToken: null,
+            googleRefreshToken: null,
+            googleCalendarEnabled: false
+          }
+        });
         
         return { 
           token: null, 

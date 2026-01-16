@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Typography,
   IconButton,
@@ -67,11 +67,10 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
   // Helper to normalize ID to string
   const normalizeId = (id) => (id?._id || id)?.toString();
   
-  // Check if current user is the owner
-  const currentUserId = normalizeId(currentUser?.id || currentUser?._id);
-  const taskUserId = normalizeId(task.userId);
+  // Memoize computed values
+  const currentUserId = useMemo(() => normalizeId(currentUser?.id || currentUser?._id), [currentUser]);
+  const taskUserId = useMemo(() => normalizeId(task.userId), [task.userId]);
   const isOwner = taskUserId === currentUserId;
-  // Check if task is shared
   const isShared = task.sharedWith?.length > 0;
   
   // Make task draggable only if not completed or archived
@@ -143,14 +142,8 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
 
   const handleToggleUser = (userId) => {
     setSelectedUserIds(prev => 
-      prev.includes(userId) 
-        ? prev.filter(id => id !== userId)
-        : [...prev, userId]
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
     );
-  };
-
-  const handleRemoveSelectedUser = (userId) => {
-    setSelectedUserIds(prev => prev.filter(id => id !== userId));
   };
 
   // Helper: Get user data by ID
@@ -165,24 +158,21 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
   };
 
   // Get selected users from selectedUserIds
-  const selectedUsers = selectedUserIds
-    .map(id => users.find(u => normalizeId(u) === id))
-    .filter(Boolean);
+  const selectedUsers = useMemo(() => 
+    selectedUserIds.map(id => users.find(u => normalizeId(u) === id)).filter(Boolean),
+    [selectedUserIds, users]
+  );
 
   const handleShare = async () => {
     const newUserIds = selectedUserIds.filter(id => !isAlreadyShared(id));
-    
     if (newUserIds.length === 0) {
       enqueueSnackbar('Please select at least one new user to share with', { variant: 'warning' });
       return;
     }
-    
     setSharing(true);
     const result = await shareTask(task._id, newUserIds);
     enqueueSnackbar(
-      result.success 
-        ? 'Task shared successfully' 
-        : (result.message || 'Failed to share task'),
+      result.success ? 'Task shared successfully' : (result.message || 'Failed to share task'),
       { variant: result.success ? 'success' : 'error' }
     );
     if (result.success) handleCloseShareDialog();
@@ -193,12 +183,50 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
     setUnsharingUserId(userId);
     const result = await unshareTask(task._id, userId);
     enqueueSnackbar(
-      result.success 
-        ? 'User removed from shared task' 
-        : (result.message || 'Failed to unshare task'),
+      result.success ? 'User removed from shared task' : (result.message || 'Failed to unshare task'),
       { variant: result.success ? 'success' : 'error' }
     );
     setUnsharingUserId(null);
+  };
+
+  // Helper: Action button component
+  const ActionButton = ({ icon: Icon, onClick, tooltip, disabled, color, sx }) => (
+    <Tooltip title={tooltip}>
+      <span>
+        <IconButton size="small" onClick={(e) => { e.stopPropagation(); onClick(); }} 
+          color={color} disabled={disabled} sx={sx}>
+          <Icon fontSize="small" />
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+
+  // Helper: Render chips
+  const renderChips = () => {
+    const chips = [
+      { label: task.status, color: 'default' },
+      task.priority && { 
+        label: task.priority, 
+        color: task.priority === TaskPriority.HIGH ? 'error' : task.priority === TaskPriority.MEDIUM ? 'warning' : 'default' 
+      },
+      task.rollover && { label: 'Auto-rollover', color: 'info' },
+      task.parentTaskId && { label: 'Recurring', icon: RepeatIcon, color: 'secondary' },
+      isShared && { label: `Shared (${task.sharedWith?.length || 0})`, icon: PeopleIcon, color: 'info' },
+      !isOwner && task.userId && { label: `By ${task.userId.name || 'Unknown'}`, color: 'default' },
+      ...(task.tags || []).map(tag => ({ label: tag, color: 'primary' }))
+    ].filter(Boolean);
+
+    return chips.map((chip, idx) => (
+      <Chip
+        key={idx}
+        label={chip.label}
+        icon={chip.icon ? <chip.icon sx={styles.chipIcon} /> : undefined}
+        size="small"
+        color={chip.color}
+        variant="outlined"
+        sx={styles.chip}
+      />
+    ));
   };
 
   if (isCompleted) {
@@ -222,42 +250,22 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
             </Tooltip>
           </Box>
           <Box display="flex" alignItems="center" gap={0.5} sx={styles.completedActionsBox}>
-            <Tooltip title={isArchived ? "Cannot change status of archived tasks" : "Mark as incomplete"}>
-              <span>
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isArchived) {
-                      onToggleStatus();
-                    }
-                  }}
-                  color="success"
-                  disabled={isArchived}
-                  sx={styles.completedIconButton}
-                >
-                  <CheckCircleIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title={isOwner ? "Delete task" : "Only task owner can delete"}>
-              <span>
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (isOwner) {
-                      onDelete();
-                    }
-                  }}
-                  color="error"
-                  disabled={!isOwner}
-                  sx={styles.deleteIconButton}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <ActionButton
+              icon={CheckCircleIcon}
+              onClick={() => !isArchived && onToggleStatus()}
+              tooltip={isArchived ? "Cannot change status of archived tasks" : "Mark as incomplete"}
+              disabled={isArchived}
+              color="success"
+              sx={styles.completedIconButton}
+            />
+            <ActionButton
+              icon={DeleteIcon}
+              onClick={() => isOwner && onDelete()}
+              tooltip={isOwner ? "Delete task" : "Only task owner can delete"}
+              disabled={!isOwner}
+              color="error"
+              sx={styles.deleteIconButton}
+            />
           </Box>
         </Box>
       </Box>
@@ -311,170 +319,61 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
               </Typography>
             )}
             <Box display="flex" gap={0.75} flexWrap="wrap" alignItems="center" sx={styles.tagsBox}>
-              <Chip 
-                label={task.status} 
-                size="small" 
-                color="default"
-                variant="outlined"
-                sx={styles.chip}
-              />
-              {task.priority && (
-                <Chip 
-                  label={task.priority} 
-                  size="small" 
-                  color={
-                    task.priority === TaskPriority.HIGH ? 'error' : 
-                    task.priority === TaskPriority.MEDIUM ? 'warning' : 
-                    'default'
-                  }
-                  variant="outlined"
-                  sx={styles.chip}
-                />
-              )}
-              {task.rollover && (
-                <Chip 
-                  label="Auto-rollover" 
-                  size="small" 
-                  color="info"
-                  variant="outlined"
-                  sx={styles.chip}
-                />
-              )}
-              {task.parentTaskId && (
-                <Chip 
-                  icon={<RepeatIcon sx={styles.chipIcon} />}
-                  label="Recurring" 
-                  size="small" 
-                  color="secondary"
-                  variant="outlined"
-                  sx={styles.chip}
-                />
-              )}
-              {isShared && (
-                <Chip 
-                  icon={<PeopleIcon sx={styles.chipIcon} />}
-                  label={`Shared (${task.sharedWith?.length || 0})`}
-                  size="small" 
-                  color="info"
-                  variant="outlined"
-                  sx={styles.chip}
-                />
-              )}
-              {!isOwner && task.userId && (
-                <Chip 
-                  label={`By ${task.userId.name || 'Unknown'}`}
-                  size="small" 
-                  color="default"
-                  variant="outlined"
-                  sx={styles.chip}
-                />
-              )}
-              {task.tags && task.tags.length > 0 && task.tags.map((tag, index) => (
-                <Chip
-                  key={index}
-                  label={tag}
-                  size="small"
-                  color="primary"
-                  variant="outlined"
-                  sx={styles.chip}
-                />
-              ))}
+              {renderChips()}
             </Box>
           </Box>
           <Box display="flex" flexDirection="column" gap={0.75} sx={styles.actionsBox}>
-            <Tooltip title={isArchived ? "Cannot change status of archived tasks" : "Mark as completed"}>
-              <span>
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isArchived) {
-                      onToggleStatus();
-                    }
-                  }}
-                  color="default"
-                  disabled={isArchived}
-                  sx={styles.iconButton}
-                >
-                  <RadioButtonUncheckedIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Edit task">
-              <span>
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onEdit();
-                  }} 
-                  color="primary"
-                  sx={styles.editIconButton}
-                >
-                  <EditIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <ActionButton
+              icon={RadioButtonUncheckedIcon}
+              onClick={() => !isArchived && onToggleStatus()}
+              tooltip={isArchived ? "Cannot change status of archived tasks" : "Mark as completed"}
+              disabled={isArchived}
+              color="default"
+              sx={styles.iconButton}
+            />
+            <ActionButton
+              icon={EditIcon}
+              onClick={onEdit}
+              tooltip="Edit task"
+              color="primary"
+              sx={styles.editIconButton}
+            />
             {showArchive && !isArchived && (
-              <Tooltip title="Archive task">
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onArchive();
-                  }} 
-                  color="default"
-                  sx={styles.archiveIconButton}
-                >
-                  <ArchiveIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+              <ActionButton
+                icon={ArchiveIcon}
+                onClick={onArchive}
+                tooltip="Archive task"
+                color="default"
+                sx={styles.archiveIconButton}
+              />
             )}
             {isArchived && onRestore && (
-              <Tooltip title="Restore task">
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onRestore();
-                  }} 
-                  color="primary"
-                  sx={styles.restoreIconButton}
-                >
-                  <UnarchiveIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+              <ActionButton
+                icon={UnarchiveIcon}
+                onClick={onRestore}
+                tooltip="Restore task"
+                color="primary"
+                sx={styles.restoreIconButton}
+              />
             )}
             {isOwner && !isArchived && (
-              <Tooltip title="Share task">
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShareDialogOpen(true);
-                  }} 
-                  color="primary"
-                  sx={styles.shareIconButton}
-                >
-                  <ShareIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+              <ActionButton
+                icon={ShareIcon}
+                onClick={() => setShareDialogOpen(true)}
+                tooltip="Share task"
+                color="primary"
+                sx={styles.shareIconButton}
+              />
             )}
             {!isArchived && (
-              <Tooltip title="Delete task">
-                <IconButton 
-                  size="small" 
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  color="error"
-                  disabled={!isOwner}
-                  sx={styles.deleteIconButtonAccordion}
-                >
-                  <DeleteIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+              <ActionButton
+                icon={DeleteIcon}
+                onClick={onDelete}
+                tooltip="Delete task"
+                disabled={!isOwner}
+                color="error"
+                sx={styles.deleteIconButtonAccordion}
+              />
             )}
           </Box>
         </Box>
@@ -494,6 +393,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                 {task.sharedWith.map((sharedUser) => {
                   const sharedUserId = normalizeId(sharedUser);
                   const sharedUserData = typeof sharedUser === 'object' ? sharedUser : getUserData(sharedUserId);
+                  const isUnsharing = unsharingUserId === sharedUserId;
                   return (
                     <ListItem key={sharedUserId} disablePadding>
                       <ListItemText 
@@ -506,15 +406,11 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                           <IconButton
                             edge="end"
                             onClick={() => handleUnshare(sharedUserId)}
-                            disabled={unsharingUserId === sharedUserId}
+                            disabled={isUnsharing}
                             color="error"
                             size="small"
                           >
-                            {unsharingUserId === sharedUserId ? (
-                              <CircularProgress size={20} />
-                            ) : (
-                              <PersonRemoveIcon fontSize="small" />
-                            )}
+                            {isUnsharing ? <CircularProgress size={20} /> : <PersonRemoveIcon fontSize="small" />}
                           </IconButton>
                         </Tooltip>
                       </ListItemSecondaryAction>
@@ -544,7 +440,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
                       <Chip
                         key={userId}
                         label={`${user.name}${user.email ? ` (${user.email})` : ''}`}
-                        onDelete={() => handleRemoveSelectedUser(userId)}
+                        onDelete={() => setSelectedUserIds(prev => prev.filter(id => id !== userId))}
                         deleteIcon={<CloseIcon />}
                         color="primary"
                         variant="outlined"
@@ -585,9 +481,7 @@ const TaskCard = ({ id, task, date, onEdit, onDelete, onToggleStatus, onArchive,
             <List>
               {users.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={styles.shareDialogEmptyText}>
-                  {searchQuery.trim() 
-                    ? 'No users found matching your search' 
-                    : 'Type in the search box above to find users'}
+                  {searchQuery.trim() ? 'No users found matching your search' : 'Type in the search box above to find users'}
                 </Typography>
               ) : (
                 users

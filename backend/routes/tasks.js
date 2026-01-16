@@ -133,9 +133,13 @@ const createCalendarEventForTask = async (user, task) => {
       return;
     }
     
-    // Save user if token was refreshed
+    // Save user if token was refreshed (use findByIdAndUpdate to avoid parallel save errors)
     if (tokenResult.refreshed) {
-      await user.save();
+      const updateFields = { googleAccessToken: user.googleAccessToken };
+      if (user.googleRefreshToken) {
+        updateFields.googleRefreshToken = user.googleRefreshToken;
+      }
+      await User.findByIdAndUpdate(user._id, { $set: updateFields });
     }
     
     // Use user's timezone or default to UTC
