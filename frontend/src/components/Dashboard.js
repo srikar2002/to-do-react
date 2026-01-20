@@ -36,9 +36,7 @@ import {
   Close as CloseIcon,
   Brightness4 as Brightness4Icon,
   Brightness7 as Brightness7Icon,
-  Person as PersonIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon
+  Person as PersonIcon
 } from '@mui/icons-material';
 import dayjs from 'dayjs';
 import {
@@ -62,6 +60,8 @@ import { useTasks } from '../hooks/useTasks';
 import { useTheme } from '../contexts/ThemeContext';
 import TaskCard from './TaskCard';
 import AnalyticsDashboard from './AnalyticsDashboard';
+import WeeklyView from './WeeklyView';
+import DeleteTaskDialog from './DeleteTaskDialog';
 import { getDashboardStyles } from '../styles/dashboardStyles';
 import {
   TaskStatus,
@@ -86,9 +86,6 @@ import {
   navigateToPreviousWeek,
   navigateToNextWeek,
   navigateToCurrentWeek,
-  getTasksForDate,
-  getTaskSummary,
-  formatWeekRange,
   canEditTask,
   canDragTask,
   getDateKey,
@@ -481,57 +478,16 @@ const Dashboard = () => {
               />
 
               {/* Weekly Task View */}
-              <Grid item xs={12}>
-                <Card sx={styles.weeklyViewCard}>
-                  <Box sx={styles.weeklyHeaderBox}>
-                    <IconButton onClick={handlePreviousWeek} size="small" sx={styles.weeklyNavButton}>
-                      <ChevronLeftIcon />
-                    </IconButton>
-                    <Typography variant="h6" sx={styles.weeklyTitle}>
-                      {formatWeekRange(weekStartDate)}
-                    </Typography>
-                    <Box sx={styles.weeklyButtonBox}>
-                      <Button onClick={handleTodayWeek} size="small" variant="outlined" sx={styles.todayButton}>
-                        Today
-                      </Button>
-                      <IconButton onClick={handleNextWeek} size="small" sx={styles.weeklyNavButton}>
-                        <ChevronRightIcon />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                  <Grid container spacing={1}>
-                    {weekDates.map(dateStr => {
-                      const dateTasks = getTasksForDate(allTasks, dateStr);
-                      const pending = dateTasks.filter(t => t.status === TaskStatus.PENDING);
-                      const completed = dateTasks.filter(t => t.status === TaskStatus.COMPLETED);
-                      const isToday = dateStr === today;
-                      const d = dayjs(dateStr);
-                      const taskSummary = getTaskSummary(dateTasks);
-                      return (
-                        <Grid item xs={12} sm={6} md={true} key={dateStr} sx={styles.weeklyGridItem}>
-                          <Box sx={styles.weekDayBox(isToday)}>
-                            <Typography variant="caption" sx={styles.weekDayLabel}>
-                              {d.format('ddd')}
-                            </Typography>
-                            <Box sx={styles.weeklyDayNumberBox}>
-                              <Typography variant="h6" sx={styles.weekDayNumber(isToday)}>
-                                {d.format('D')}
-                              </Typography>
-                              <Box sx={styles.weeklyStatusDotsBox}>
-                                {pending.length > 0 && <Box sx={styles.weeklyStatusDot(true, darkMode)} />}
-                                {completed.length > 0 && <Box sx={styles.weeklyStatusDot(false, darkMode)} />}
-                              </Box>
-                            </Box>
-                            <Typography variant="caption" sx={styles.weekDaySummary}>
-                              {taskSummary}
-                            </Typography>
-                          </Box>
-                        </Grid>
-                      );
-                    })}
-                  </Grid>
-                </Card>
-              </Grid>
+              <WeeklyView
+                weekDates={weekDates}
+                allTasks={allTasks}
+                today={today}
+                weekStartDate={weekStartDate}
+                onPreviousWeek={handlePreviousWeek}
+                onNextWeek={handleNextWeek}
+                onTodayWeek={handleTodayWeek}
+                darkMode={darkMode}
+              />
             </Grid>
             <DragOverlay>
               {activeTask ? (
@@ -794,29 +750,13 @@ const Dashboard = () => {
         </Dialog>
 
         {/* Delete Confirmation Dialog */}
-        <Dialog 
-          open={deleteDialogOpen} 
-          onClose={handleCloseDeleteDialog} 
-          maxWidth="sm" 
-          fullWidth
-          PaperProps={{ sx: styles.deleteDialogPaper }}
-        >
-          <DialogTitle>Delete Task</DialogTitle>
-          <DialogContent>
-            <Typography variant="body1">
-              Are you sure you want to delete "{taskToDelete?.title}"?
-            </Typography>
-            {taskToDelete?.status === TaskStatus.PENDING && (
-              <Typography variant="body2" color="error" sx={styles.deleteDialogWarningText}>
-                This task is still Pending. Do you still want to delete it?
-              </Typography>
-            )}
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
-            <Button onClick={handleConfirmDelete} color="error" variant="contained">Delete</Button>
-          </DialogActions>
-        </Dialog>
+        <DeleteTaskDialog
+          open={deleteDialogOpen}
+          task={taskToDelete}
+          onClose={handleCloseDeleteDialog}
+          onConfirm={handleConfirmDelete}
+          darkMode={darkMode}
+        />
       </Box>
   );
 };
