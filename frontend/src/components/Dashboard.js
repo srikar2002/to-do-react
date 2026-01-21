@@ -1,43 +1,18 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import {
   Container,
-  AppBar,
-  Toolbar,
-  Typography,
-  Button,
   Box,
   Grid,
   Card,
   CardContent,
   CardHeader,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
   IconButton,
-  Chip,
   CircularProgress,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  InputAdornment,
   Tabs,
   Tab,
-  FormControlLabel,
-  Switch
+  Typography
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  Logout as LogoutIcon,
-  Close as CloseIcon,
-  Brightness4 as Brightness4Icon,
-  Brightness7 as Brightness7Icon,
-  Person as PersonIcon
-} from '@mui/icons-material';
 import dayjs from 'dayjs';
 import {
   DndContext,
@@ -62,17 +37,14 @@ import TaskCard from './TaskCard';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import WeeklyView from './WeeklyView';
 import DeleteTaskDialog from './DeleteTaskDialog';
+import TaskDialog from './TaskDialog';
+import DashboardHeader from './DashboardHeader';
 import { getDashboardStyles } from '../styles/dashboardStyles';
 import {
   TaskStatus,
-  TaskPriority,
-  DateOption,
-  ValidationLimits,
-  DayLabels,
   DefaultValues,
   SuccessMessages,
-  ErrorMessages,
-  ValidationMessages
+  ErrorMessages
 } from '../constants/enums';
 import {
   convertDateOptionToDate,
@@ -117,7 +89,6 @@ const Dashboard = () => {
   const { tasks, dates, archivedTasks, loading, createTask, createRecurringTask, updateTask, deleteTask, toggleTaskStatus, archiveTask, restoreTask, fetchArchivedTasks } = useTasks();
   const { darkMode, toggleTheme } = useTheme();
   const { enqueueSnackbar } = useSnackbar();
-  const navigate = useNavigate();
   
   const [openDialog, setOpenDialog] = useState(false);
   const [editingTask, setEditingTask] = useState(null);
@@ -388,57 +359,14 @@ const Dashboard = () => {
 
   return (
     <Box sx={styles.mainBox}>
-        <AppBar 
-          position="static"
-          sx={styles.appBar}
-        >
-          <Toolbar>
-            <Typography 
-              variant="h5" 
-              component="div" 
-              sx={styles.title}
-            >
-              Taskly
-            </Typography>
-            <Typography 
-              variant="body1" 
-              sx={styles.welcomeText}
-            >
-              Welcome, <strong>{user?.name}</strong>!
-            </Typography>
-            {currentTab === 0 && (
-              <IconButton 
-                onClick={() => handleOpenDialog()} 
-                sx={styles.addButton}
-              >
-                <AddIcon />
-              </IconButton>
-            )}
-            <IconButton 
-              color="inherit" 
-              onClick={() => navigate('/profile')}
-              sx={styles.iconButton}
-              title="Profile"
-            >
-              <PersonIcon />
-            </IconButton>
-            <IconButton 
-              color="inherit" 
-              onClick={toggleTheme} 
-              sx={styles.iconButton}
-            >
-              {darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
-            </IconButton>
-            <Button 
-              color="inherit" 
-              onClick={logout} 
-              startIcon={<LogoutIcon />}
-              sx={styles.logoutButton}
-            >
-              Logout
-            </Button>
-          </Toolbar>
-        </AppBar>
+        <DashboardHeader
+          user={user}
+          darkMode={darkMode}
+          toggleTheme={toggleTheme}
+          logout={logout}
+          currentTab={currentTab}
+          onAddTask={() => handleOpenDialog()}
+        />
 
         <Container maxWidth="lg" sx={styles.container}>
           <Box sx={styles.tabsBox}>
@@ -545,209 +473,19 @@ const Dashboard = () => {
         </Container>
 
         {/* Task Dialog */}
-        <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>
-          <DialogTitle>
-            {editingTask ? 'Edit Task' : formData.isRecurring ? 'Create Recurring Task' : 'Add New Task'}
-          </DialogTitle>
-          <form onSubmit={handleSubmit} noValidate>
-            <DialogContent>
-              {!editingTask && (
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.isRecurring}
-                      onChange={(e) => setFormData(prev => ({ ...prev, isRecurring: e.target.checked }))}
-                      color="primary"
-                    />
-                  }
-                  label="Make this a recurring task"
-                  sx={styles.dialogFormControlLabel}
-                />
-              )}
-              <TextField
-                autoFocus
-                margin="dense"
-                label="Task Title"
-                fullWidth
-                variant="outlined"
-                value={formData.title}
-                onChange={(e) => {
-                  const next = e.target.value || '';
-                  const capped = next.length > ValidationLimits.TITLE_MAX_LENGTH ? next.slice(0, ValidationLimits.TITLE_MAX_LENGTH) : next;
-                  setFormData(prev => ({ ...prev, title: capped }));
-                  if (errors.title && capped.trim().length > 0 && capped.trim().length <= ValidationLimits.TITLE_MAX_LENGTH) {
-                    setErrors(prev => ({ ...prev, title: '' }));
-                  }
-                }}
-                error={Boolean(errors.title) || (formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH && formData.title.length > 0)}
-                helperText={errors.title || (formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH && formData.title.length > 0 ? ValidationMessages.TITLE_MAX_REACHED : '')}
-                sx={styles.dialogTextField}
-              />
-              <TextField
-                margin="dense"
-                label="Description"
-                fullWidth
-                multiline
-                rows={3}
-                variant="outlined"
-                value={formData.description}
-                onChange={(e) => {
-                  const next = e.target.value || '';
-                  const capped = next.length > ValidationLimits.DESCRIPTION_MAX_LENGTH ? next.slice(0, ValidationLimits.DESCRIPTION_MAX_LENGTH) : next;
-                  setFormData(prev => ({ ...prev, description: capped }));
-                }}
-                error={formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH && formData.description.length > 0}
-                helperText={formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH && formData.description.length > 0 ? ValidationMessages.DESCRIPTION_MAX_REACHED : ''}
-                sx={styles.dialogTextField}
-              />
-              <FormControl fullWidth sx={styles.dialogFormControl}>
-                <InputLabel id="date-select-label">{formData.isRecurring ? 'Start Date' : 'Date'}</InputLabel>
-                <Select
-                  labelId="date-select-label"
-                  value={formData.date}
-                  label={formData.isRecurring ? 'Start Date' : 'Date'}
-                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                >
-                  <MenuItem value={DateOption.TODAY}>{DayLabels.TODAY}</MenuItem>
-                  <MenuItem value={DateOption.TOMORROW}>{DayLabels.TOMORROW}</MenuItem>
-                  <MenuItem value={DateOption.DAY_AFTER_TOMORROW}>{DayLabels.DAY_AFTER_TOMORROW}</MenuItem>
-                </Select>
-              </FormControl>
-              {formData.isRecurring && !editingTask && (
-                <>
-                  <FormControl fullWidth sx={styles.dialogFormControl}>
-                    <InputLabel id="recurrence-pattern-select-label">Recurrence Pattern</InputLabel>
-                    <Select
-                      labelId="recurrence-pattern-select-label"
-                      value={formData.recurrencePattern}
-                      label="Recurrence Pattern"
-                      onChange={(e) => setFormData(prev => ({ ...prev, recurrencePattern: e.target.value }))}
-                    >
-                      <MenuItem value="daily">Daily</MenuItem>
-                      <MenuItem value="weekly">Weekly</MenuItem>
-                      <MenuItem value="custom">Custom Interval</MenuItem>
-                    </Select>
-                  </FormControl>
-                  {formData.recurrencePattern === 'custom' && (
-                    <TextField
-                      margin="dense"
-                      label="Interval (days)"
-                      type="number"
-                      fullWidth
-                      variant="outlined"
-                      value={formData.recurrenceInterval}
-                      onChange={(e) => {
-                        const value = parseInt(e.target.value) || 1;
-                        setFormData(prev => ({ ...prev, recurrenceInterval: Math.max(1, value) }));
-                        if (errors.recurrenceInterval && value >= 1) {
-                          setErrors(prev => ({ ...prev, recurrenceInterval: '' }));
-                        }
-                      }}
-                      error={Boolean(errors.recurrenceInterval)}
-                      helperText={errors.recurrenceInterval || 'Number of days between occurrences'}
-                      sx={styles.dialogTextField}
-                      inputProps={{ min: 1 }}
-                    />
-                  )}
-                  <TextField
-                    margin="dense"
-                    label="End Date (Optional)"
-                    type="date"
-                    fullWidth
-                    variant="outlined"
-                    value={formData.recurrenceEndDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, recurrenceEndDate: e.target.value }))}
-                    InputLabelProps={{ shrink: true }}
-                    helperText="Leave empty to generate tasks for 90 days"
-                    sx={styles.dialogTextField}
-                  />
-                </>
-              )}
-              <FormControl fullWidth sx={styles.dialogFormControl}>
-                <InputLabel id="priority-select-label">Priority</InputLabel>
-                <Select
-                  labelId="priority-select-label"
-                  value={formData.priority}
-                  label="Priority"
-                  onChange={(e) => setFormData(prev => ({ ...prev, priority: e.target.value }))}
-                >
-                  <MenuItem value={TaskPriority.LOW}>{TaskPriority.LOW}</MenuItem>
-                  <MenuItem value={TaskPriority.MEDIUM}>{TaskPriority.MEDIUM}</MenuItem>
-                  <MenuItem value={TaskPriority.HIGH}>{TaskPriority.HIGH}</MenuItem>
-                </Select>
-              </FormControl>
-              <TextField
-                margin="dense"
-                label="Add Tag"
-                fullWidth
-                variant="outlined"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyPress={(e) => {
-                  if (e.key === 'Enter' && tagInput.trim()) {
-                    e.preventDefault();
-                    const trimmedTag = tagInput.trim();
-                    if (!formData.tags.includes(trimmedTag)) {
-                      setFormData(prev => ({ ...prev, tags: [...prev.tags, trimmedTag] }));
-                    }
-                    setTagInput('');
-                  }
-                }}
-                InputProps={{
-                  endAdornment: tagInput && (
-                    <InputAdornment position="end">
-                      <IconButton
-                        size="small"
-                        onClick={() => {
-                          const trimmedTag = tagInput.trim();
-                          if (trimmedTag && !formData.tags.includes(trimmedTag)) {
-                            setFormData(prev => ({ ...prev, tags: [...prev.tags, trimmedTag] }));
-                          }
-                          setTagInput('');
-                        }}
-                      >
-                        <AddIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  )
-                }}
-                sx={styles.dialogTagTextField}
-              />
-              {formData.tags.length > 0 && (
-                <Box sx={styles.dialogTagsBox}>
-                  {formData.tags.map((tag, index) => (
-                    <Chip
-                      key={index}
-                      label={tag}
-                      size="small"
-                      onDelete={() => {
-                        setFormData(prev => ({ ...prev, tags: prev.tags.filter((_, i) => i !== index) }));
-                      }}
-                      deleteIcon={<CloseIcon />}
-                      color="primary"
-                      variant="outlined"
-                    />
-                  ))}
-                </Box>
-              )}
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleCloseDialog}>Cancel</Button>
-              <Button
-                type="submit"
-                variant="contained"
-                disabled={
-                  formData.title.trim().length === 0 ||
-                  formData.title.length >= ValidationLimits.TITLE_MAX_LENGTH ||
-                  formData.description.length >= ValidationLimits.DESCRIPTION_MAX_LENGTH ||
-                  (formData.isRecurring && formData.recurrencePattern === 'custom' && (!formData.recurrenceInterval || formData.recurrenceInterval < 1))
-                }
-              >
-                {editingTask ? 'Update' : formData.isRecurring ? 'Create Recurring Task' : 'Create'}
-              </Button>
-            </DialogActions>
-          </form>
-        </Dialog>
+        <TaskDialog
+          open={openDialog}
+          editingTask={editingTask}
+          formData={formData}
+          setFormData={setFormData}
+          tagInput={tagInput}
+          setTagInput={setTagInput}
+          errors={errors}
+          setErrors={setErrors}
+          onClose={handleCloseDialog}
+          onSubmit={handleSubmit}
+          darkMode={darkMode}
+        />
 
         {/* Delete Confirmation Dialog */}
         <DeleteTaskDialog
