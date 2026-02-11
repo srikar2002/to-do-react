@@ -7,7 +7,6 @@ import {
   Card,
   CardContent,
   CardHeader,
-  IconButton,
   CircularProgress,
   Tabs,
   Tab,
@@ -40,6 +39,7 @@ import WeeklyView from './WeeklyView';
 import DeleteTaskDialog from './DeleteTaskDialog';
 import TaskDialog from './TaskDialog';
 import DashboardHeader from './DashboardHeader';
+import ArchivedTasksView from './ArchivedTasksView';
 import { getDashboardStyles } from '../styles/dashboardStyles';
 import {
   TaskStatus,
@@ -350,34 +350,14 @@ const Dashboard = () => {
           )}
 
           {currentTab === 1 && (
-            <Card>
-              <CardHeader
-                title="Archived Tasks"
-                subheader={`${archivedTasks.length} archived task${archivedTasks.length !== 1 ? 's' : ''}`}
-                sx={styles.archivedCardHeader}
-              />
-              <CardContent>
-                {archivedTasks.length === 0 ? (
-                  <Typography variant="body2" color="text.secondary" sx={styles.archivedEmptyText}>
-                    No archived tasks
-                  </Typography>
-                ) : (
-                  <Box>
-                    {archivedTasks.map((task) => (
-                      <TaskCard
-                        key={task._id}
-                        task={task}
-                        onEdit={() => handleOpenDialog(task)}
-                        onDelete={() => handleRequestDelete(task)}
-                        onToggleStatus={() => handleToggleStatus(task._id, task.status)}
-                        onRestore={() => handleRestore(task)}
-                        showArchive={false}
-                      />
-                    ))}
-                  </Box>
-                )}
-              </CardContent>
-            </Card>
+            <ArchivedTasksView
+              archivedTasks={archivedTasks}
+              onEdit={handleOpenDialog}
+              onDelete={handleRequestDelete}
+              onToggleStatus={handleToggleStatus}
+              onRestore={handleRestore}
+              darkMode={darkMode}
+            />
           )}
 
           {currentTab === 2 && (
