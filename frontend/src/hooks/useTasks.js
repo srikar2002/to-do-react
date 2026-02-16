@@ -18,11 +18,9 @@ import {
 } from '../services/taskService';
 
 // Constants
-const EMPTY_TASKS_STATE = {
-  today: [],
-  tomorrow: [],
-  dayAfterTomorrow: []
-};
+const DATE_BUCKETS = ['today', 'tomorrow', 'dayAfterTomorrow'];
+const EMPTY_TASKS_STATE = Object.fromEntries(DATE_BUCKETS.map(key => [key, []]));
+const EMPTY_DATES_STATE = Object.fromEntries(DATE_BUCKETS.map(key => [key, '']));
 
 /**
  * Custom hook to manage tasks state and operations
@@ -32,52 +30,41 @@ export const useTasks = () => {
   const { user } = useAuth();
   const socket = useSocket();
   const [tasks, setTasks] = useState(EMPTY_TASKS_STATE);
-  const [dates, setDates] = useState({
-    today: '',
-    tomorrow: '',
-    dayAfterTomorrow: ''
-  });
+  const [dates, setDates] = useState(EMPTY_DATES_STATE);
   const [archivedTasks, setArchivedTasks] = useState([]);
   const [loading, setLoading] = useState(false);
 
+  // Helper: Transform all date buckets
+  const transformDateBuckets = useCallback((transformer) => {
+    setTasks(prev => Object.fromEntries(
+      DATE_BUCKETS.map(key => [key, transformer(prev[key])])
+    ));
+  }, []);
+
   // Helper: Update task in all date buckets
   const updateTaskInBuckets = useCallback((taskId, updater) => {
-    setTasks(prev => {
-      const updateTaskInArray = (taskArray) => taskArray.map(task => 
-        task._id === taskId ? updater(task) : task
-      );
-      return {
-        today: updateTaskInArray(prev.today),
-        tomorrow: updateTaskInArray(prev.tomorrow),
-        dayAfterTomorrow: updateTaskInArray(prev.dayAfterTomorrow)
-      };
-    });
-  }, []);
+    transformDateBuckets(taskArray => 
+      taskArray.map(task => task._id === taskId ? updater(task) : task)
+    );
+  }, [transformDateBuckets]);
 
   // Helper: Remove task from all date buckets
   const removeFromDateBuckets = useCallback((taskId) => {
-    setTasks(prev => ({
-      today: prev.today.filter(t => t._id !== taskId),
-      tomorrow: prev.tomorrow.filter(t => t._id !== taskId),
-      dayAfterTomorrow: prev.dayAfterTomorrow.filter(t => t._id !== taskId)
-    }));
-  }, []);
+    transformDateBuckets(taskArray => taskArray.filter(t => t._id !== taskId));
+  }, [transformDateBuckets]);
 
   // React 19: useOptimistic for immediate UI feedback when toggling task status
   const [optimisticTasks, setOptimisticTaskStatus] = useOptimistic(
     tasks,
-    (currentTasks, { taskId, newStatus }) => {
-      const updateTaskInArray = (taskArray) =>
-        taskArray.map(task => 
-          task._id === taskId ? { ...task, status: newStatus } : task
-        );
-
-      return {
-        today: updateTaskInArray(currentTasks.today),
-        tomorrow: updateTaskInArray(currentTasks.tomorrow),
-        dayAfterTomorrow: updateTaskInArray(currentTasks.dayAfterTomorrow)
-      };
-    }
+    (currentTasks, { taskId, newStatus }) => 
+      Object.fromEntries(
+        DATE_BUCKETS.map(key => [
+          key,
+          currentTasks[key].map(task => 
+            task._id === taskId ? { ...task, status: newStatus } : task
+          )
+        ])
+      )
   );
 
   const fetchTasks = useCallback(async () => {
@@ -89,11 +76,9 @@ export const useTasks = () => {
     try {
       const result = await fetchTasksService();
       if (result.success && result.tasks && result.dates) {
-        setTasks({
-          today: result.tasks[result.dates.today] || [],
-          tomorrow: result.tasks[result.dates.tomorrow] || [],
-          dayAfterTomorrow: result.tasks[result.dates.dayAfterTomorrow] || []
-        });
+        setTasks(Object.fromEntries(
+          DATE_BUCKETS.map(key => [key, result.tasks[result.dates[key]] || []])
+        ));
         setDates(result.dates);
       } else {
         setTasks(EMPTY_TASKS_STATE);
@@ -292,7 +277,7 @@ export const useTasks = () => {
       fetchTasks();
     } else {
       setTasks(EMPTY_TASKS_STATE);
-      setDates({ today: '', tomorrow: '', dayAfterTomorrow: '' });
+      setDates(EMPTY_DATES_STATE);
       setArchivedTasks([]);
     }
   }, [user, fetchTasks]);
